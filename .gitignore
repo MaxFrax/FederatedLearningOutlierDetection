@@ -326,3 +326,4 @@ $RECYCLE.BIN/
 
 # End of https://www.toptal.com/developers/gitignore/api/python,virtualenv,vscode,jetbrains,venv,macos,windows
 .vscode/settings.json
+cache/*
