@@ -1,5 +1,6 @@
 import os
 import logging
+from flod.dataset import download_dataset
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -18,3 +19,4 @@ if __name__ == '__main__':
         LOGGER.info(f'Creating CACHE folder at {CACHE_FOLDER}')
         os.makedirs(CACHE_FOLDER)
     
+    download_dataset(CACHE_FOLDER)
