@@ -12,7 +12,7 @@ class SisFallFeaturesExtraction():
 
     dataframe = None
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, fall_begin_sample: int, fall_end_sample: int):
         
         # Read dataframe and keep only the first triaxial accellerometer data
         self.dataframe = pd.read_csv(path, header=None).iloc[:,:3]
@@ -33,6 +33,8 @@ class SisFallFeaturesExtraction():
         self._sum_vector_magnitude(True)
         self._sum_vector_magnitude_horizontal()
         self._sum_vector_magnitude_horizontal(True)
+
+        self._label_data(fall_begin_sample, fall_end_sample)
 
     @staticmethod
     def _filter_column(column: pd.Series) -> pd.Series:
@@ -144,3 +146,12 @@ class SisFallFeaturesExtraction():
             self.dataframe.iloc[k, self.dataframe.columns.get_loc(dest_col)] = angle
             k += 1
             w = self._window(k, Nv)
+
+    def _label_data(self, fall_begin_sample: int, fall_end_sample: int):
+        # Labels the data without caring about sliding windows
+
+        self.dataframe['is_fall'] = 0
+
+        is_fall_ix = self.dataframe.columns.get_loc('is_fall')
+
+        self.dataframe.iloc[fall_begin_sample : fall_end_sample+1, is_fall_ix] = 1
