@@ -1,6 +1,8 @@
 import os
 import logging
 from flod.dataset import download_dataset
+from flod.features_extraction.load_features import load_features
+import json
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -19,4 +21,6 @@ if __name__ == '__main__':
         LOGGER.info(f'Creating CACHE folder at {CACHE_FOLDER}')
         os.makedirs(CACHE_FOLDER)
     
-    download_dataset(CACHE_FOLDER)
+    dataset_path = download_dataset(CACHE_FOLDER)
+
+    load_features(CACHE_FOLDER, dataset_path)

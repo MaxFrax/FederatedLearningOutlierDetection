@@ -9,7 +9,7 @@ DATASET_URL = 'http://sistemic.udea.edu.co/wp-content/uploads/2016/03/SisFall_da
 DATASET_FOLDER_NAME = 'SisFall_dataset'
 FILENAME = 'SisFall_dataset.zip'
 
-def download_dataset(storage_folder_path: str):
+def download_dataset(storage_folder_path: str) -> str:
     file_path = os.path.join(storage_folder_path, FILENAME)
     progress_file_path = os.path.join(storage_folder_path, f"{FILENAME}.inProgress")
 
@@ -38,4 +38,6 @@ def download_dataset(storage_folder_path: str):
             zip_ref.extractall(progress_directory_path)
         LOGGER.info(f'Unpacking of {directory_path} completed')
         os.rename(progress_directory_path, directory_path)
+
+    return os.path.join(storage_folder_path, DATASET_FOLDER_NAME)
     

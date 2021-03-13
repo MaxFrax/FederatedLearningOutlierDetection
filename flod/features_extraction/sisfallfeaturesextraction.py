@@ -11,6 +11,8 @@ import numpy as np
 class SisFallFeaturesExtraction():
 
     dataframe = None
+    fall_begin_sample = -1 
+    fall_end_sample = -1
 
     def __init__(self, path: str, fall_begin_sample: int, fall_end_sample: int):
         
@@ -34,7 +36,20 @@ class SisFallFeaturesExtraction():
         self._sum_vector_magnitude_horizontal()
         self._sum_vector_magnitude_horizontal(True)
 
+        self.fall_begin_sample = fall_begin_sample
+        self.fall_end_sample = fall_end_sample
+
         self._label_data(fall_begin_sample, fall_end_sample)
+
+
+    @classmethod
+    def from_cached_csv(cls, filename: str, fall_begin_sample: int, fall_end_sample: int):
+        e = cls.__new__(cls)
+        cache_dataframe = pd.read_csv(filename, header=1)
+        e.fall_begin_sample = fall_begin_sample
+        e.fall_end_sample = fall_end_sample
+        e.dataframe = cache_dataframe
+        return e
 
     @staticmethod
     def _filter_column(column: pd.Series) -> pd.Series:
