@@ -45,7 +45,7 @@ class SisFallFeaturesExtraction():
     @classmethod
     def from_cached_csv(cls, filename: str, fall_begin_sample: int, fall_end_sample: int):
         e = cls.__new__(cls)
-        cache_dataframe = pd.read_csv(filename, header=1)
+        cache_dataframe = pd.read_csv(filename)
         e.fall_begin_sample = fall_begin_sample
         e.fall_end_sample = fall_end_sample
         e.dataframe = cache_dataframe
