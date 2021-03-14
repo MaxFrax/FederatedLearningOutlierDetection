@@ -65,3 +65,5 @@ def load_features(cache_folder: str, dataset_path: str) -> pd.DataFrame:
                         dataset = extraction.dataframe
                     else:
                         dataset = pd.concat([dataset, extraction.dataframe])
+
+    return dataset
