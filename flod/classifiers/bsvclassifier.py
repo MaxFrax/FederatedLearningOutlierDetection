@@ -4,7 +4,7 @@ from typing import Iterable
 import logging
 import tensorflow as tf
 import numpy as np 
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import precision_score, accuracy_score, recall_score, f1_score
 
 LOGGER = logging.getLogger(__name__)
 
@@ -19,6 +19,23 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         # Should the optimizer be a parameter?
         self.optimizer = tf.optimizers.Adam(learning_rate=1e-4)
         self.penalization = penalization
+        self.X_ = None
+        self.y_ = None
+        self.betas_ = None
+        self.constant_term_ = None
+        self.radiuses_ = None
+        self.sv_i = None
+        self.sv_ = None
+
+    def __getstate__(self) -> dict:
+        state = self.__dict__
+        del state['optimizer']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__ = state
+        self.optimizer = tf.optimizers.Adam(learning_rate=1e-4)
+        
 
     def fit(self, X, y):
 
@@ -26,9 +43,6 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         
         self.X_ = X
         self.y_ = y
-
-        # Suggested c value for big datasets
-        #self.c_ = 1 / (sum(y) * len(y)) if sum(y) > 0 else 1
 
         LOGGER.debug(f'Solving optimization {len(X)} with c {self.c}')
 
@@ -51,7 +65,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         rs = [self._compute_r(x) for x in X]
         prediction = [int(ri > self.radiuses_[self.sv_i]) for ri in rs]
 
-        return prediction
+        return np.array(prediction)
 
     @staticmethod
     def _gaussian_kernel(x_i: Iterable, x_j: Iterable, q: float) -> float:
@@ -112,7 +126,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         i = 0
         tot_iter = 0
         last_update = 0
-        emergency_limit = 5000
+        emergency_limit = 3000
 
         while i < n_iter and tot_iter < emergency_limit:
             optimizer.minimize(objective_function, betas)
@@ -149,7 +163,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
             r = self.radiuses_[i]
             
             prediction = [int(ri > r) for ri in self.radiuses_]
-            s = accuracy_score(self.y_, prediction)
+            s = f1_score(self.y_, prediction)
             
             if s > score:
                 score = s
