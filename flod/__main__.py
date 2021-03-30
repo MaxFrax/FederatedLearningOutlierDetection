@@ -9,6 +9,8 @@ from flod.classifiers.bsvclassifier import BSVClassifier
 import numpy as np
 from scipy.stats import uniform as sp_randFloat
 from scipy.stats import randint as sp_randInt
+from joblib import dump
+from datetime import datetime
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -21,6 +23,7 @@ logging.basicConfig(
 
 LOGGER = logging.getLogger(__name__)
 CACHE_FOLDER = os.path.abspath('./cache/')
+MODELS_FOLDER = os.path.abspath('./cache/models/')
 
 if __name__ == '__main__':
     if not os.path.exists(CACHE_FOLDER):
@@ -34,8 +37,7 @@ if __name__ == '__main__':
     X = np.array(dataset[['c1', 'c2', 'c3', 'c4']])  # Features
     y = np.array(dataset['is_fall'])  # Labels
 
-    #X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=900, test_size=100, stratify=y, shuffle=True)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=4500, test_size=500, stratify=y, shuffle=True)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=900, test_size=100, stratify=y, shuffle=True)
 
     LOGGER.info(f'Outliers in training {sum(y_train)}/{len(y_train)}')
 
@@ -54,8 +56,8 @@ if __name__ == '__main__':
             #'c': [1 / (sum(y_train) * z) for z in random.sample(zetas, 20)],
             'c': [1 / (sum(y_train) * len(y_train))],
             'q': [(k+1) / (max_distance**2) for k in range(10)],
-            'penalization' : [100],
-            'n_iter': [10]
+            'penalization' : [100, 200],
+            'n_iter': [100]
         }
 
     cv = StratifiedKFold(n_splits=2, shuffle=True)
@@ -80,3 +82,11 @@ if __name__ == '__main__':
     print(f'Recall {recall_score(y_test, y_pred)}')
     print(f'F1 {f1_score(y_test, y_pred)}')
     print(f'Accuracy {accuracy_score(y_test, y_pred)}')
+
+    if not os.path.exists(MODELS_FOLDER):
+        LOGGER.info(f'Creating trained models folder at {MODELS_FOLDER}')
+        os.makedirs(MODELS_FOLDER)
+
+    dump_path = os.path.join(MODELS_FOLDER, f'{datetime.now().strftime("%Y%m%d_%H_%M")}.joblib')
+
+    dump(clf, dump_path)
