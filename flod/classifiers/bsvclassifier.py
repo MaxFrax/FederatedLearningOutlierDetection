@@ -13,11 +13,11 @@ LOGGER = logging.getLogger(__name__)
 
 class BSVClassifier(ClassifierMixin, BaseEstimator):
 
-    def __init__(self, c: float = 0.25, q: float = 1, random_seed: int = 42, init_bound: float = .1, n_iter: int = 100, penalization: int = 10):
+    def __init__(self, q: float = 1, random_seed: int = 42, init_bound: float = .1, n_iter: int = 100, penalization: int = 10):
         self.random_seed = random_seed
         self.init_bound = init_bound
         self.q = q
-        self.c = c
+        self.c = 1
         self.n_iter = n_iter
         # Should the optimizer be a parameter?
         self.optimizer = tf.optimizers.Adam(learning_rate=1e-4)
@@ -49,8 +49,18 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         LOGGER.debug(f'Solving optimization {len(X)} with c {self.c}')
 
+        self.X_train_, self.y_train_ = [], []
+
+        for i, y in enumerate(y):
+            if y == 0:
+                self.y_train_.append(y)
+                self.X_train_.append(X[i])
+
+        self.X_train_ = np.array(self.X_train_)
+        self.y_train_ = np.array(self.y_train_)
+
         self.betas_, self.constant_term_ = BSVClassifier._solve_optimization_tensorflow(
-            X, y, self.random_seed, self.init_bound, self.c, self.q, self.n_iter, self.optimizer, self.penalization)
+            self.X_train_, self.y_train_, self.random_seed, self.init_bound, self.c, self.q, self.n_iter, self.optimizer, self.penalization)
 
         self.radiuses_ = [self._compute_r(x) for x in X]
 
@@ -162,9 +172,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
     def _compute_r(self, x) -> float:
         v = self.constant_term_
         v += BSVClassifier._gaussian_kernel(x, x, self.q)
-        v += -2 * \
-            tf.tensordot(self.betas_, [self._gaussian_kernel(
-                x_i, x, self.q) for x_i in self.X_], axes=1)
+        v += -2 * tf.tensordot(self.betas_, [self._gaussian_kernel(x_i, x, self.q) for x_i in self.X_train_], axes=1)
         v = np.sqrt(v)
         return v
 
