@@ -1,21 +1,21 @@
-# Dato un dataframe, date delle dimensioni di sliding window per ogni feature
-
-
-
-# definire funzione per ogni feature che raccoglie dimensione sliding window da dizionario costruttore. Altro argomento è variabile se usare dati normali o filtered
-
 import pandas as pd
 from scipy.signal import butter, filtfilt
 import numpy as np
+from typing import Iterable
 
 class SisFallFeaturesExtraction():
 
     dataframe = None
+    features = pd.DataFrame()
+    path = None
+
     fall_begin_sample = -1 
     fall_end_sample = -1
 
     def __init__(self, path: str, fall_begin_sample: int, fall_end_sample: int):
         
+        self.path = path
+
         # Read dataframe and keep only the first triaxial accellerometer data
         self.dataframe = pd.read_csv(path, header=None).iloc[:,:3]
         self.dataframe.columns = ['x', 'y', 'z']
@@ -41,15 +41,20 @@ class SisFallFeaturesExtraction():
 
         self._label_data(fall_begin_sample, fall_end_sample)
 
+    def compute_features(self, window_size: int, filtered: bool = False, overlap: float = .99):
+        self.features = pd.DataFrame()
 
-    @classmethod
-    def from_cached_csv(cls, filename: str, fall_begin_sample: int, fall_end_sample: int):
-        e = cls.__new__(cls)
-        cache_dataframe = pd.read_csv(filename)
-        e.fall_begin_sample = fall_begin_sample
-        e.fall_end_sample = fall_end_sample
-        e.dataframe = cache_dataframe
-        return e
+        self._c1(window_size, filtered=filtered, overlap=overlap)
+        self._c2(window_size, filtered=filtered, overlap=overlap)
+        self._c3(window_size, filtered=filtered, overlap=overlap)
+        self._c4(window_size, filtered=filtered, overlap=overlap)
+
+        values = []
+        for w in self._window_iter(window_size, overlap):
+            # If more than half of the samples in window is a fall, the window is a fall
+            values.append(sum(w['is_fall']) >= 1)
+
+        self.features['is_fall'] = values
 
     @staticmethod
     def _filter_column(column: pd.Series) -> pd.Series:
@@ -95,72 +100,83 @@ class SisFallFeaturesExtraction():
             return self.dataframe.iloc[0:0]
         return self.dataframe.iloc[begin:k]
 
-    def c1(self, Nv: int, filtered: bool = False):
+    def _window_iter(self, size: int, overlap: float) -> Iterable[pd.DataFrame]:
+
+        k = size
+        
+        assert(1 - overlap > 0 and 1 - overlap < 1)
+        w = self._window(k, size)
+
+        while not w.empty:
+            yield w
+            k += int(size*(1-overlap))
+            w = self._window(k, size)
+
+
+
+    def _c1(self, Nv: int, filtered: bool = False, overlap: float = 0.99):
         dest_col = 'f_c1' if filtered else 'c1'
         src_col = 'f_svm' if filtered else 'svm'
 
-        self.dataframe[dest_col] = 0
+        self.features[dest_col] = 0
 
-        k = Nv
-        
-        w = self._window(k, Nv)
-        while not w.empty:
+        values = []
+
+        for w in self._window_iter(Nv, overlap):
             rms = np.sqrt(np.mean(np.array(w[src_col]**2)))
-            self.dataframe.iloc[k, self.dataframe.columns.get_loc(dest_col)] = rms
-            k += 1
-            w = self._window(k, Nv)
+            values.append(rms)
 
-    def c2(self, Nv: int, filtered: bool = False):
+            
+
+        self.features[dest_col] = values
+
+    def _c2(self, Nv: int, filtered: bool = False, overlap: float = 0.99):
         dest_col = 'f_c2' if filtered else 'c2'
         src_col = 'f_svmh' if filtered else 'svmh'
 
-        self.dataframe[dest_col] = 0
+        self.features[dest_col] = 0
 
-        k = Nv
+        values = []
         
-        w = self._window(k, Nv)
-        while not w.empty:
+        for w in self._window_iter(Nv, overlap):
             rms = np.sqrt(np.mean(np.array(w[src_col]**2)))
-            self.dataframe.iloc[k, self.dataframe.columns.get_loc(dest_col)] = rms
-            k += 1
-            w = self._window(k, Nv)
+            values.append(rms)
 
-    def c3(self, Nv: int, filtered: bool = False):
+        self.features[dest_col] = values
+
+    def _c3(self, Nv: int, filtered: bool = False, overlap: float = 0.99):
         dest_col = 'f_c3' if filtered else 'c3'
         src_col = 'f_svm' if filtered else 'svm'
 
-        self.dataframe[dest_col] = 0
+        self.features[dest_col] = 0
 
-        k = Nv
+        values = []
         
-        w = self._window(k, Nv)
-        while not w.empty:
+        for w in self._window_iter(Nv, overlap):
             ix_src_col = w.columns.get_loc(src_col)
-            ix_dst_col = w.columns.get_loc(dest_col)
             ix_min = w[src_col].argmin()
             ix_max = w[src_col].argmax()
             ptp = w.iloc[ix_max, ix_src_col] - w.iloc[ix_min, ix_src_col]
-            self.dataframe.iloc[k, ix_dst_col] = ptp
-            k += 1
-            w = self._window(k, Nv)
+            values.append(ptp)
+
+        self.features[dest_col] = values
 
     # This window feature is computed only on its last sample
-    def c4(self, Nv: int, filtered: bool = False):
+    def _c4(self, Nv: int, filtered: bool = False, overlap: float = 0.99):
         dest_col = 'f_c4' if filtered else 'c4'
         src_cols = ['fx', 'fy', 'fz'] if filtered else ['x', 'y', 'z']
 
-        self.dataframe[dest_col] = 0
+        self.features[dest_col] = 0
 
-        k = Nv
+        values = []
 
-        w = self._window(k, Nv)
-        while not w.empty:
+        for w in self._window_iter(Nv, overlap):
             latest_sample = np.array(w[src_cols].iloc[-1,:])
             angle = np.arctan2(np.sqrt(latest_sample[0]**2 + latest_sample[2]**2), -latest_sample[1])
 
-            self.dataframe.iloc[k, self.dataframe.columns.get_loc(dest_col)] = angle
-            k += 1
-            w = self._window(k, Nv)
+            values.append(angle)
+
+        self.features[dest_col] = values
 
     def _label_data(self, fall_begin_sample: int, fall_end_sample: int):
         # Labels the data without caring about sliding windows
