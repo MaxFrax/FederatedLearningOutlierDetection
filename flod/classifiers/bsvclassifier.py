@@ -62,7 +62,6 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         self.betas_, self.constant_term_ = BSVClassifier._solve_optimization_tensorflow(
             self.X_train_, self.y_train_, self.random_seed, self.init_bound, self.c, self.q, self.n_iter, self.optimizer, self.penalization)
 
-        self.radiuses_ = [self._compute_r(x) for x in X]
         self.radiuses_ = np.array([self._compute_r(x) for x in X])
 
         self.sv_i, self.sv_ = self._best_precision_sv()
