@@ -62,7 +62,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         self.betas_, self.constant_term_ = BSVClassifier._solve_optimization_tensorflow(
             self.X_train_, self.y_train_, self.random_seed, self.init_bound, self.c, self.q, self.n_iter, self.optimizer, self.penalization)
 
-        self.radiuses_ = [self._compute_r(x) for x in X]
+        self.radiuses_ = np.array([self._compute_r(x) for x in X])
 
         self.sv_i, self.sv_ = self._best_precision_sv()
 
@@ -84,7 +84,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
     @staticmethod
     def _gaussian_kernel(x_i: Iterable, x_j: Iterable, q: float) -> float:
         squared_norm = np.linalg.norm(np.array(x_i) - np.array(x_j)) ** 2
-        return np.float64(np.exp(-1 * q * squared_norm))
+        return np.float32(np.exp(-1 * q * squared_norm))
 
     @staticmethod
     def _solve_optimization_tensorflow(xs, y, random_seed, init_bound, c, q, n_iter, optimizer, penalization):
@@ -98,23 +98,34 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         LOGGER.debug(f'Optimizing with q {q}')
 
-        def gaussian_kernel(
-            x1, x2): return BSVClassifier._gaussian_kernel(x1, x2, q)
+        def gaussian_kernel(x1, x2): return BSVClassifier._gaussian_kernel(x1, x2, q)
 
         # Inits beta values randomly
         np.random.seed(random_seed)
         init_values = np.random.uniform(0, init_bound, len(xs))
         for i in range(len(xs)):
-            # Ho fissato le variabili legate agli outliers. Sono che hanno beta=C. Perchè farle cambiare?
+            # We give B = C to all the outliers. We know that's the right solution
             init = c if y[i] == 1 else init_values[i]
-            beta = tf.Variable(
-                init, name=f'beta_{i}', trainable=True, dtype=tf.float64)
-            betas.append(beta)
+            betas.append(tf.Variable(init, name=f'beta_{i}', trainable=True, dtype=tf.float32))
 
-        self_kernels = [gaussian_kernel(x_i, x_i) for x_i in xs]
-        kernel_values = np.array(
-            [[gaussian_kernel(x1, x2) for x1 in xs] for x2 in xs])
-        kernels = tf.constant(kernel_values, dtype='float64')
+
+        self_kernels = np.array([gaussian_kernel(x_i, x_i) for x_i in xs])
+
+        LOGGER.warning(f'Estimated kernel_values size {(4 * (len(xs) ** 2))/1024/1024/1024} GB')
+
+        kernel_values = np.empty((len(xs), len(xs)), dtype=np.float32)
+        
+        for i, xi in enumerate(xs):
+            for j, xj in enumerate(xs):
+                if j > i:
+                    break
+            
+                kern = gaussian_kernel(xi, xj)
+                kernel_values[i][j] = kern
+                kernel_values[j][i] = kern
+
+        kernels = tf.constant(kernel_values, dtype=tf.float32)
+
 
         def objective_function():
             constant_term = tf.tensordot(
@@ -142,7 +153,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
             return v
 
         best_v = objective_function()
-        best_betas = [b.numpy() for b in betas]
+        best_betas = np.array([b.numpy() for b in betas])
         i = 0
         tot_iter = 0
         last_update = 0
@@ -156,7 +167,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
             tot_iter += 1
 
             if v < best_v:
-                best_betas = [b.numpy() for b in betas]
+                best_betas = np.array([b.numpy() for b in betas])
                 i = 0
                 last_update = best_v - v
                 best_v = v

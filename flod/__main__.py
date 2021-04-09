@@ -4,13 +4,16 @@ from flod.dataset import download_dataset
 from flod.features_extraction.load_features import load_features
 import json
 from sklearn.model_selection import KFold, cross_validate, train_test_split, RandomizedSearchCV, StratifiedKFold, GridSearchCV
-from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_score, make_scorer, accuracy_score
+from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_score, make_scorer, accuracy_score, classification_report
 from flod.classifiers.bsvclassifier import BSVClassifier
 import numpy as np
 from scipy.stats import uniform as sp_randFloat
 from scipy.stats import randint as sp_randInt
 from joblib import dump
 from datetime import datetime
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler, MaxAbsScaler, RobustScaler, QuantileTransformer
+from sklearn.decomposition import PCA
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -32,60 +35,50 @@ if __name__ == '__main__':
     
     dataset_path = download_dataset(CACHE_FOLDER)
 
-    dataset = load_features(CACHE_FOLDER, dataset_path)
+    dataset = load_features(CACHE_FOLDER, dataset_path, 100, False, 0.8)
 
     X = np.array(dataset[['c1', 'c2', 'c3', 'c4']])  # Features
     y = np.array(dataset['is_fall'])  # Labels
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=900, test_size=100, stratify=y, shuffle=True)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, shuffle=True, stratify=y)
 
     LOGGER.info(f'Outliers in training {sum(y_train)}/{len(y_train)}')
 
-    max_distance = 0
-    for i in X_train:
-        for j in X_train:
-            dist = np.linalg.norm(i-j, ord=2)
-            if dist > max_distance:
-                max_distance = dist
+    pipe = Pipeline([
+            ('scaler', MaxAbsScaler()),
+            ('reduce_dim', PCA()),
+            ('classifier', BSVClassifier())
+    ])
 
-    LOGGER.info(f'Max distance among training set points {max_distance}')
+    params = {
+        'scaler': [StandardScaler(), MaxAbsScaler(), RobustScaler(), QuantileTransformer()],
+        'reduce_dim__n_components': range(X.shape[1])[1:],
+        'classifier__n_iter': [10],
+        'classifier__penalization': np.random.uniform(1, 100, 3),
+        'classifier__q': np.random.uniform(0.1, 100, 10)
+    }
 
-    zetas = [z for z in range(len(X_train))]
+    scoring = ['precision', 'recall', 'f1']
+    cv = StratifiedKFold(n_splits=3, shuffle=True)
+    search = GridSearchCV(pipe, params, n_jobs=4, pre_dispatch=4, cv=cv, refit='f1', verbose=5, return_train_score=True, scoring=scoring)
 
-    parameters = {
-            #'c': [1 / (sum(y_train) * z) for z in random.sample(zetas, 20)],
-            'c': [1 / (sum(y_train) * len(y_train))],
-            'q': [(k+1) / (max_distance**2) for k in range(10)],
-            'penalization' : [100, 200],
-            'n_iter': [100]
-        }
+    search.fit(X_train, y_train)
 
-    cv = StratifiedKFold(n_splits=2, shuffle=True)
-    model = BSVClassifier()
+    LOGGER.info(f'Best params: {search.best_params_}')
+    LOGGER.info(f'Best score: {search.best_score_}')
 
-    randm_src = GridSearchCV(estimator=model, param_grid = parameters,
-                            cv = cv, n_jobs=-1, scoring=make_scorer(f1_score), verbose=10)
-    randm_src.fit(X_train, y_train)
+    LOGGER.info(f'Score in test data: {search.score(X_test, y_test)}')
 
-    print(" Results from Random Search " )
-    print("\n The best estimator across ALL searched params:\n", randm_src.best_estimator_)
-    print("\n The best score across ALL searched params:\n", randm_src.best_score_)
-    print("\n The best parameters across ALL searched params:\n", randm_src.best_params_)
+    cv_res = pd.DataFrame(search.cv_results_)
+    LOGGER.info(cv_res)
 
-    clf = BSVClassifier(**randm_src.best_params_)
-
-    clf.fit(X_train, y_train)
-
-    y_pred = clf.predict(X_test)
-
-    print(f'Precision {precision_score(y_test, y_pred)}')
-    print(f'Recall {recall_score(y_test, y_pred)}')
-    print(f'F1 {f1_score(y_test, y_pred)}')
-    print(f'Accuracy {accuracy_score(y_test, y_pred)}')
+    LOGGER.info(classification_report(y_test, search.predict(X_test)))
 
     if not os.path.exists(MODELS_FOLDER):
         LOGGER.info(f'Creating trained models folder at {MODELS_FOLDER}')
         os.makedirs(MODELS_FOLDER)
+
+    clf = search.best_estimator_['classifier']
 
     dump_path = os.path.join(MODELS_FOLDER, f'{datetime.now().strftime("%Y%m%d_%H_%M")}.joblib')
 
