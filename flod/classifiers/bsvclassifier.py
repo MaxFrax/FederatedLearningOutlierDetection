@@ -13,11 +13,11 @@ LOGGER = logging.getLogger(__name__)
 
 class BSVClassifier(ClassifierMixin, BaseEstimator):
 
-    def __init__(self, q: float = 1, random_seed: int = 42, init_bound: float = .1, n_iter: int = 100, penalization: int = 10):
+    def __init__(self, c: float = 1, q: float = 1, random_seed: int = 42, init_bound: float = .1, n_iter: int = 100, penalization: int = 10):
         self.random_seed = random_seed
         self.init_bound = init_bound
         self.q = q
-        self.c = 1
+        self.c = c
         self.n_iter = n_iter
         # Should the optimizer be a parameter?
         self.optimizer = tf.optimizers.Adam(learning_rate=1e-4)
