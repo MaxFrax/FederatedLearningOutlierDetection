@@ -2,8 +2,10 @@ import logging
 import random
 from typing import Iterable
 
+import gurobipy as gp
 import numpy as np
 import tensorflow as tf
+from gurobipy import GRB
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.metrics import (accuracy_score, confusion_matrix, f1_score,
                              precision_score, recall_score)
@@ -59,8 +61,8 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         self.X_train_ = np.array(self.X_train_)
         self.y_train_ = np.array(self.y_train_)
 
-        self.betas_, self.constant_term_ = BSVClassifier._solve_optimization_tensorflow(
-            self.X_train_, self.y_train_, self.random_seed, self.init_bound, self.c, self.q, self.n_iter, self.optimizer, self.penalization)
+        self.betas_, self.constant_term_ = BSVClassifier._solve_optimization_gurobi(
+            self.X_train_, self.y_train_, self.c, self.q)
 
         self.radiuses_ = np.array([self._compute_r(x) for x in X])
 
@@ -84,7 +86,42 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
     @staticmethod
     def _gaussian_kernel(x_i: Iterable, x_j: Iterable, q: float) -> float:
         squared_norm = np.linalg.norm(np.array(x_i) - np.array(x_j)) ** 2
-        return np.float32(np.exp(-1 * q * squared_norm))
+        return np.float64(np.exp(-1 * q * squared_norm))
+
+    @staticmethod
+    def _solve_optimization_gurobi(xs, y, c, q):
+
+        def gaussian_kernel(
+            x1, x2): return BSVClassifier._gaussian_kernel(x1, x2, q)
+
+        self_kernels = np.array([gaussian_kernel(x_i, x_i) for x_i in xs])
+        kernels = np.empty((len(xs), len(xs)), dtype=np.float64)
+
+        for i, xi in enumerate(xs):
+            for j, xj in enumerate(xs):
+                if j > i:
+                    break
+
+                kern = gaussian_kernel(xi, xj)
+                kernels[i][j] = kern
+                kernels[j][i] = kern
+
+        model = gp.Model('WolfeDual')
+
+        betas = model.addMVar(len(xs), name="betas", ub=c)
+
+        sum_betas = model.addConstr(sum(betas) == 1, name="sum_betas")
+
+        model.setObjective(self_kernels @ betas - betas @
+                           kernels @ betas, GRB.MAXIMIZE)
+
+        model.setParam('NumericFocus', 3)
+
+        model.optimize()
+
+        best_betas = np.array([v.x for v in model.getVars()], dtype=np.float64)
+
+        return best_betas, best_betas @ kernels @ best_betas
 
     @staticmethod
     def _solve_optimization_tensorflow(xs, y, random_seed, init_bound, c, q, n_iter, optimizer, penalization):
@@ -98,7 +135,8 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         LOGGER.debug(f'Optimizing with q {q}')
 
-        def gaussian_kernel(x1, x2): return BSVClassifier._gaussian_kernel(x1, x2, q)
+        def gaussian_kernel(
+            x1, x2): return BSVClassifier._gaussian_kernel(x1, x2, q)
 
         # Inits beta values randomly
         np.random.seed(random_seed)
@@ -106,26 +144,26 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         for i in range(len(xs)):
             # We give B = C to all the outliers. We know that's the right solution
             init = c if y[i] == 1 else init_values[i]
-            betas.append(tf.Variable(init, name=f'beta_{i}', trainable=True, dtype=tf.float32))
-
+            betas.append(tf.Variable(
+                init, name=f'beta_{i}', trainable=True, dtype=tf.float32))
 
         self_kernels = np.array([gaussian_kernel(x_i, x_i) for x_i in xs])
 
-        LOGGER.warning(f'Estimated kernel_values size {(4 * (len(xs) ** 2))/1024/1024/1024} GB')
+        LOGGER.warning(
+            f'Estimated kernel_values size {(4 * (len(xs) ** 2))/1024/1024/1024} GB')
 
-        kernel_values = np.empty((len(xs), len(xs)), dtype=np.float32)
-        
+        kernel_values = np.empty((len(xs), len(xs)), dtype=np.float64)
+
         for i, xi in enumerate(xs):
             for j, xj in enumerate(xs):
                 if j > i:
                     break
-            
+
                 kern = gaussian_kernel(xi, xj)
                 kernel_values[i][j] = kern
                 kernel_values[j][i] = kern
 
         kernels = tf.constant(kernel_values, dtype=tf.float32)
-
 
         def objective_function():
             constant_term = tf.tensordot(
@@ -183,7 +221,8 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
     def _compute_r(self, x) -> float:
         v = self.constant_term_
         v += BSVClassifier._gaussian_kernel(x, x, self.q)
-        v += -2 * tf.tensordot(self.betas_, [self._gaussian_kernel(x_i, x, self.q) for x_i in self.X_train_], axes=1)
+        v += -2 * tf.tensordot(self.betas_, [self._gaussian_kernel(
+            x_i, x, self.q) for x_i in self.X_train_], axes=1)
         v = np.sqrt(v)
         return v
 
