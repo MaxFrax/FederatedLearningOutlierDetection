@@ -182,7 +182,10 @@ class SisFallFeaturesExtraction():
         # Labels the data without caring about sliding windows
 
         self.dataframe['is_fall'] = 0
+        
+        if fall_begin_sample > 0 and fall_end_sample > 0:
 
-        is_fall_ix = self.dataframe.columns.get_loc('is_fall')
 
-        self.dataframe.iloc[fall_begin_sample : fall_end_sample+1, is_fall_ix] = 1
+            is_fall_ix = self.dataframe.columns.get_loc('is_fall')
+
+            self.dataframe.iloc[fall_begin_sample : fall_end_sample+1, is_fall_ix] = 1

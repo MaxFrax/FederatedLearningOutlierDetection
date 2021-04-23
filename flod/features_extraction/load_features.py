@@ -11,7 +11,7 @@ LOGGER = logging.getLogger(__name__)
 LABELS_PATH = 'labels.json'
 FEATURES_FOLDER = 'features'
 
-def load_features(cache_folder: str, dataset_path: str, window_size: int, filtered: bool, overlap: float) -> pd.DataFrame:
+def load_features(cache_folder: str, dataset_path: str, window_size: int, filtered: bool, overlap: float, person_id: str = None) -> pd.DataFrame:
     cache_features_path = os.path.join(cache_folder, FEATURES_FOLDER)
     labels = {}
 
@@ -30,42 +30,47 @@ def load_features(cache_folder: str, dataset_path: str, window_size: int, filter
     for path, folder_list, file_list in tqdm(os.walk(path_to_walk)):
             for file in file_list:
 
-                if file in labels:
+                if file not in labels:
+                    continue
+                
+                # Filters the data by person id if provided
+                if not (person_id is None or person_id in file):
+                    continue
                     
-                    # If we don't have the labels for this samples, let's skip them
-                    if labels[file] is None:
-                        continue
 
-                    base_name = f'{file}_{str(window_size)}_{"f" if filtered else ""}_{str(overlap).replace(".","_")}'
-                    progress_filename = f'{base_name}.inProgress'
-                    progress_feature_path = os.path.join(cache_features_path, progress_filename)
-                    feature_path = os.path.join(cache_features_path, base_name)
-                    
-                    if os.path.exists(progress_feature_path):
-                        LOGGER.info(f'Deleting file from previous failed caching: f{progress_feature_path}')
-                        os.remove(progress_file_path)
+                base_name = f'{file}_{str(window_size)}_{"f" if filtered else ""}_{str(overlap).replace(".","_")}'
+                progress_filename = f'{base_name}.inProgress'
+                progress_feature_path = os.path.join(cache_features_path, progress_filename)
+                feature_path = os.path.join(cache_features_path, base_name)
+                
+                if os.path.exists(progress_feature_path):
+                    LOGGER.info(f'Deleting file from previous failed caching: f{progress_feature_path}')
+                    os.remove(progress_file_path)
 
+                try:
                     begin, end = labels[file]['begin'], labels[file]['end']
+                except:
+                    begin, end = -1, -1
 
-                    if os.path.exists(feature_path):
-                        LOGGER.info(f'Loading cached feature: f{feature_path}')
-                        with open(feature_path, 'rb') as f:
-                            extraction = pickle.load(f)
-                    else:
-                        file_path = os.path.join(path, file)
-                        
-                        extraction = SisFallFeaturesExtraction(path=file_path, fall_begin_sample=begin, fall_end_sample=end)
-                        extraction.compute_features(window_size, filtered, overlap)
-
-                        LOGGER.info(f'Caching features {progress_feature_path}')
-                        with open(progress_feature_path, 'wb') as f:
-                            pickle.dump(extraction, f)
-                        
-                        os.rename(progress_feature_path, feature_path)
+                if os.path.exists(feature_path):
+                    LOGGER.info(f'Loading cached feature: f{feature_path}')
+                    with open(feature_path, 'rb') as f:
+                        extraction = pickle.load(f)
+                else:
+                    file_path = os.path.join(path, file)
                     
-                    if dataset is None:
-                        dataset = extraction.features
-                    else:
-                        dataset = pd.concat([dataset, extraction.features])
+                    extraction = SisFallFeaturesExtraction(path=file_path, fall_begin_sample=begin, fall_end_sample=end)
+                    extraction.compute_features(window_size, filtered, overlap)
+
+                    LOGGER.info(f'Caching features {progress_feature_path}')
+                    with open(progress_feature_path, 'wb') as f:
+                        pickle.dump(extraction, f)
+                    
+                    os.rename(progress_feature_path, feature_path)
+                
+                if dataset is None:
+                    dataset = extraction.features
+                else:
+                    dataset = pd.concat([dataset, extraction.features])
 
     return dataset

@@ -66,7 +66,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         self.radiuses_ = np.array([self._compute_r(x) for x in X])
 
-        self.sv_i, self.sv_ = self._best_precision_sv()
+        self.radius_ = self._best_radius()
 
         # Return the classifier
         return self
@@ -79,7 +79,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
             LOGGER.error('You must call fit before predict!')
 
         rs = [self._compute_r(x) for x in X]
-        prediction = [int(ri > self.radiuses_[self.sv_i]) for ri in rs]
+        prediction = [int(ri > self.radius_) for ri in rs]
 
         return np.array(prediction)
 
@@ -108,14 +108,19 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         model = gp.Model('WolfeDual')
 
-        betas = model.addMVar(len(xs), name="betas", ub=c)
+        betas = model.addMVar(len(xs), name="betas", ub=c, lb=0)
 
         sum_betas = model.addConstr(sum(betas) == 1, name="sum_betas")
 
-        model.setObjective(self_kernels @ betas - betas @
-                           kernels @ betas, GRB.MAXIMIZE)
+        model.ModelSense = GRB.MAXIMIZE
+
+        model.setParam('ObjScale', -0.5)
 
         model.setParam('NumericFocus', 3)
+
+        model.setObjective(self_kernels @ betas - betas @
+                           kernels @ betas)
+
 
         model.optimize()
 
@@ -226,28 +231,8 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         v = np.sqrt(v)
         return v
 
-    def _best_precision_sv(self):
-        score = 0
-        best_i = 0
-        sv = None
-
-        metric = f1_score
-
-        if sum(self.y_) == 0:
-            metric = BSVClassifier.true_negative_count
-
-        for i, x in enumerate(self.X_):
-            r = self.radiuses_[i]
-
-            prediction = [int(ri > r) for ri in self.radiuses_]
-            s = metric(self.y_, prediction)
-
-            if s > score:
-                score = s
-                best_i = i
-                sv = x
-
-        return best_i, sv
+    def _best_radius(self) -> float:        
+        return np.average([self._compute_r(x) for x in self.X_train_], weights=[b / self.c for b in self.betas_])
 
     @ staticmethod
     def true_negative_count(y_test, y_pred):
