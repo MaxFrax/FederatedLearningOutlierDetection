@@ -4,7 +4,6 @@ from typing import Iterable
 
 import gurobipy as gp
 import numpy as np
-import tensorflow as tf
 from gurobipy import GRB
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.metrics import (accuracy_score, confusion_matrix, f1_score,
@@ -15,15 +14,9 @@ LOGGER = logging.getLogger(__name__)
 
 class BSVClassifier(ClassifierMixin, BaseEstimator):
 
-    def __init__(self, c: float = 1, q: float = 1, random_seed: int = 42, init_bound: float = .1, n_iter: int = 100, penalization: int = 10):
-        self.random_seed = random_seed
-        self.init_bound = init_bound
+    def __init__(self, c: float = 1, q: float = 1):
         self.q = q
         self.c = c
-        self.n_iter = n_iter
-        # Should the optimizer be a parameter?
-        self.optimizer = tf.optimizers.Adam(learning_rate=1e-4)
-        self.penalization = penalization
         self.X_ = None
         self.y_ = None
         self.betas_ = None
@@ -34,13 +27,10 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
     def __getstate__(self) -> dict:
         state = self.__dict__
-        if state.get('optimizer'):
-            del state['optimizer']
         return state
 
     def __setstate__(self, state):
         self.__dict__ = state
-        self.optimizer = tf.optimizers.Adam(learning_rate=1e-4)
 
     def fit(self, X, y):
 
@@ -128,106 +118,11 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         return best_betas, best_betas @ kernels @ best_betas
 
-    @staticmethod
-    def _solve_optimization_tensorflow(xs, y, random_seed, init_bound, c, q, n_iter, optimizer, penalization):
-
-        if abs(init_bound) > abs(c):
-            LOGGER.warning(
-                f'init_bound cannot be bigger than c. Defaulting to init_bound=c')
-            init_bound = c
-
-        betas = []
-
-        LOGGER.debug(f'Optimizing with q {q}')
-
-        def gaussian_kernel(
-            x1, x2): return BSVClassifier._gaussian_kernel(x1, x2, q)
-
-        # Inits beta values randomly
-        np.random.seed(random_seed)
-        init_values = np.random.uniform(0, init_bound, len(xs))
-        for i in range(len(xs)):
-            # We give B = C to all the outliers. We know that's the right solution
-            init = c if y[i] == 1 else init_values[i]
-            betas.append(tf.Variable(
-                init, name=f'beta_{i}', trainable=True, dtype=tf.float32))
-
-        self_kernels = np.array([gaussian_kernel(x_i, x_i) for x_i in xs])
-
-        LOGGER.warning(
-            f'Estimated kernel_values size {(4 * (len(xs) ** 2))/1024/1024/1024} GB')
-
-        kernel_values = np.empty((len(xs), len(xs)), dtype=np.float64)
-
-        for i, xi in enumerate(xs):
-            for j, xj in enumerate(xs):
-                if j > i:
-                    break
-
-                kern = gaussian_kernel(xi, xj)
-                kernel_values[i][j] = kern
-                kernel_values[j][i] = kern
-
-        kernels = tf.constant(kernel_values, dtype=tf.float32)
-
-        def objective_function():
-            constant_term = tf.tensordot(
-                tf.linalg.matvec(kernels, betas), betas, axes=1)
-
-            # The wolfe equation is the dual problem for the lagrangian.
-            # This means we have to maximize the function.
-            # Here i multiply everything for -1 so that I can still minimize
-            v = constant_term
-            v += tf.tensordot(betas, self_kernels, axes=1)
-
-            # Penalize if sum of betas is not close to 1 from the bottom
-            v += penalization * tf.math.maximum(0, 1 - sum(betas))
-            # Penalize if the sum of the betas goes above 1
-            v += penalization * tf.math.maximum(0, sum(betas) - 1)
-
-            # Penalize for each beta below zero
-            v += -penalization * sum([x for x in betas if x < 0])
-
-            # Penalize for each beta that goes above C
-            error_c = sum([(b-c) for b in betas if b - c > 0])
-            # error_c = sum([(b-c) / c for b in betas if b - c > 0])
-            v += penalization * error_c
-
-            return v
-
-        best_v = objective_function()
-        best_betas = np.array([b.numpy() for b in betas])
-        i = 0
-        tot_iter = 0
-        last_update = 0
-        emergency_limit = 3000
-
-        while i < n_iter and tot_iter < emergency_limit:
-            optimizer.minimize(objective_function, betas)
-            v = objective_function()
-
-            i += 1
-            tot_iter += 1
-
-            if v < best_v:
-                best_betas = np.array([b.numpy() for b in betas])
-                i = 0
-                last_update = best_v - v
-                best_v = v
-
-        LOGGER.info(
-            f'Optimized in {tot_iter} iterations. Latest update size: {last_update}')
-
-        constant_term = tf.tensordot(tf.linalg.matvec(
-            kernels, best_betas), best_betas, axes=1)
-
-        return best_betas, constant_term
-
     def _compute_r(self, x) -> float:
         v = self.constant_term_
         v += BSVClassifier._gaussian_kernel(x, x, self.q)
-        v += -2 * tf.tensordot(self.betas_, [self._gaussian_kernel(
-            x_i, x, self.q) for x_i in self.X_train_], axes=1)
+        v += -2 * self.betas_ @ [self._gaussian_kernel(
+            x_i, x, self.q) for x_i in self.X_train_]
         v = np.sqrt(v)
         return v
 
