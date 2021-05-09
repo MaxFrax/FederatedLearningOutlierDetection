@@ -128,9 +128,3 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
     def _best_radius(self) -> float:        
         return np.average([self._compute_r(x) for x in self.X_train_], weights=[b / self.c for b in self.betas_])
-
-    @ staticmethod
-    def true_negative_count(y_test, y_pred):
-        tn, _, _, _ = confusion_matrix(y_test, y_pred, labels=[0, 1]).ravel()
-
-        return tn
