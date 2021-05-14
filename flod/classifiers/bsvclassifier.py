@@ -108,6 +108,8 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         model.setParam('NumericFocus', 3)
 
+        model.setParam('NonConvex', 2)
+
         model.setObjective(self_kernels @ betas - betas @
                            kernels @ betas)
 
