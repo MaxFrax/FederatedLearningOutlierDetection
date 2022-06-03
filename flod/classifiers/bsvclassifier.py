@@ -98,6 +98,8 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         model = gp.Model('WolfeDual')
 
+        model.setParam('TimeLimit', 120)
+
         betas = model.addMVar(len(xs), name="betas", ub=c, lb=0)
 
         sum_betas = model.addConstr(sum(betas) == 1, name="sum_betas")
