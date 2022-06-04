@@ -73,6 +73,12 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         return np.array(prediction)
 
+    def score_samples(self, X):
+        if self.betas_ is None or self.radiuses_ is None:
+            LOGGER.error('You must call fit before score_samples!')
+
+        return [self._compute_r(x) for x in X]
+
     @staticmethod
     def _gaussian_kernel(x_i: Iterable, x_j: Iterable, q: float) -> float:
         squared_norm = np.linalg.norm(np.array(x_i) - np.array(x_j)) ** 2
