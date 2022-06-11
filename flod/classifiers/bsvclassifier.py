@@ -73,6 +73,12 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         return np.array(prediction)
 
+    def score_samples(self, X):
+        if self.betas_ is None or self.radiuses_ is None:
+            LOGGER.error('You must call fit before score_samples!')
+
+        return [self._compute_r(x) for x in X]
+
     @staticmethod
     def _gaussian_kernel(x_i: Iterable, x_j: Iterable, q: float) -> float:
         squared_norm = np.linalg.norm(np.array(x_i) - np.array(x_j)) ** 2
@@ -98,6 +104,8 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         model = gp.Model('WolfeDual')
 
+        model.setParam('TimeLimit', 120)
+
         betas = model.addMVar(len(xs), name="betas", ub=c, lb=0)
 
         sum_betas = model.addConstr(sum(betas) == 1, name="sum_betas")
@@ -107,6 +115,8 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         model.setParam('ObjScale', -0.5)
 
         model.setParam('NumericFocus', 3)
+
+        model.setParam('NonConvex', 2)
 
         model.setObjective(self_kernels @ betas - betas @
                            kernels @ betas)
@@ -128,9 +138,3 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
     def _best_radius(self) -> float:        
         return np.average([self._compute_r(x) for x in self.X_train_], weights=[b / self.c for b in self.betas_])
-
-    @ staticmethod
-    def true_negative_count(y_test, y_pred):
-        tn, _, _, _ = confusion_matrix(y_test, y_pred, labels=[0, 1]).ravel()
-
-        return tn
