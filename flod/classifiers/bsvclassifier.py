@@ -1,6 +1,7 @@
 import logging
 import random
 from typing import Iterable
+from datetime import datetime
 
 import gurobipy as gp
 import numpy as np
@@ -14,7 +15,7 @@ LOGGER = logging.getLogger(__name__)
 
 class BSVClassifier(ClassifierMixin, BaseEstimator):
 
-    def __init__(self, c: float = 1, q: float = 1):
+    def __init__(self, c: float = 1, q: float = 1, normal_class_label:int=0, outlier_class_label:int=1):
         self.q = q
         self.c = c
         self.X_ = None
@@ -24,6 +25,10 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         self.radiuses_ = None
         self.sv_i = None
         self.sv_ = None
+        self.normal_class_label = normal_class_label
+        self.outlier_class_label = outlier_class_label
+
+        assert (self.c > 0 and self.c <= 1), f"0 < {self.c} <= 1"
 
     def __getstate__(self) -> dict:
         state = self.__dict__
@@ -44,7 +49,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         self.X_train_, self.y_train_ = [], []
 
         for i, y in enumerate(y):
-            if y == 0:
+            if y == self.normal_class_label:
                 self.y_train_.append(y)
                 self.X_train_.append(X[i])
 
@@ -54,7 +59,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         self.betas_, self.constant_term_ = BSVClassifier._solve_optimization_gurobi(
             self.X_train_, self.y_train_, self.c, self.q)
 
-        self.radiuses_ = np.array([self._compute_r(x) for x in X])
+        self.radiuses_ = self.score_samples(X)
 
         self.radius_ = self._best_radius()
 
@@ -69,7 +74,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
             LOGGER.error('You must call fit before predict!')
 
         rs = [self._compute_r(x) for x in X]
-        prediction = [int(ri > self.radius_) for ri in rs]
+        prediction = [self.outlier_class_label if ri > self.radius_ else self.normal_class_label for ri in rs]
 
         return np.array(prediction)
 
@@ -123,6 +128,13 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
 
         model.optimize()
+        now = datetime.now()
+        # To enable when debugging. If not debugging it just spams
+        #model.write(f'{now}_BSVClassifier.mps')
+
+        if model.status == GRB.INFEASIBLE:
+            model.computeIIS()
+            model.write(f'{now}_BSVClassifier IIS.ilp')
 
         best_betas = np.array([v.x for v in model.getVars()], dtype=np.float64)
 
@@ -138,3 +150,9 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
     def _best_radius(self) -> float:        
         return np.average([self._compute_r(x) for x in self.X_train_], weights=[b / self.c for b in self.betas_])
+
+    def score_samples(self, X):
+        return np.array([self._compute_r(x) for x in X])
+
+    def decision_function(self, X):
+        return np.array([r - self.radius_ for r in self.radiuses_])
