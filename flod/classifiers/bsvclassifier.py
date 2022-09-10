@@ -155,4 +155,4 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         return np.array([self._compute_r(x) for x in X])
 
     def decision_function(self, X):
-        return np.array([r - self.radius_ for r in self.radiuses_])
+        return np.array([self.radius_ - r for r in self.radiuses_])
