@@ -59,7 +59,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         self.betas_, self.constant_term_ = BSVClassifier._solve_optimization_gurobi(
             self.X_train_, self.y_train_, self.c, self.q)
 
-        self.radiuses_ = self.score_samples(X)
+        self.radiuses_ = [self._compute_r(x) for x in X]
 
         self.radius_ = self._best_radius()
 
@@ -79,10 +79,10 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         return np.array(prediction)
 
     def score_samples(self, X):
-        if self.betas_ is None or self.radiuses_ is None:
+        if self.betas_ is None:
             LOGGER.error('You must call fit before score_samples!')
 
-        return [self._compute_r(x) for x in X]
+        return np.array([self.radius_ - self._compute_r(x) for x in X])
 
     @staticmethod
     def _gaussian_kernel(x_i: Iterable, x_j: Iterable, q: float) -> float:
@@ -151,8 +151,6 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
     def _best_radius(self) -> float:        
         return np.average([self._compute_r(x) for x in self.X_train_], weights=[b / self.c for b in self.betas_])
 
-    def score_samples(self, X):
-        return np.array([self._compute_r(x) for x in X])
-
     def decision_function(self, X):
-        return np.array([self.radius_ - r for r in self.radiuses_])
+        #Like sklearn OneClassSVM "Signed distance is positive for an inlier and negative for an outlier.""
+        return self.score_samples(X)
