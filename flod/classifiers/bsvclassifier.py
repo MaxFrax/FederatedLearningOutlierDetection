@@ -1,5 +1,4 @@
 import logging
-import random
 from typing import Iterable
 from datetime import datetime
 
@@ -7,8 +6,6 @@ import gurobipy as gp
 import numpy as np
 from gurobipy import GRB
 from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.metrics import (accuracy_score, confusion_matrix, f1_score,
-                             precision_score, recall_score)
 
 LOGGER = logging.getLogger(__name__)
 
