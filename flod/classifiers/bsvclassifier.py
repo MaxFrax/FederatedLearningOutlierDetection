@@ -35,8 +35,9 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         self.__dict__ = state
 
     def fit(self, X, y):
-
-        # TODO input validation
+        # Input validation
+        assert len(X) > 0, f'You cannot fit with X of length 0'
+        assert len(y) > 0, f'You cannot fit with y of length 0'
 
         self.X_ = X
         self.y_ = y
@@ -53,8 +54,18 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         self.X_train_ = np.array(self.X_train_)
         self.y_train_ = np.array(self.y_train_)
 
-        self.betas_, self.constant_term_ = BSVClassifier._solve_optimization_gurobi(
-            self.X_train_, self.y_train_, self.c, self.q)
+        try:
+            self.betas_, self.constant_term_ = BSVClassifier._solve_optimization_gurobi(
+                self.X_train_, self.y_train_, self.c, self.q)
+        except:
+            LOGGER.error(f'c: {self.c}')
+            LOGGER.error(f'q: {self.c}')
+            LOGGER.error(f'normale: {self.normal_class_label}')
+            LOGGER.error(f'outlier: {self.outlier_class_label}')
+            LOGGER.error(f'X len {self.X_train_.shape}')
+            LOGGER.error(f'y len {self.y_train_.shape}')
+            self.X_train_.dump('failedX')
+            self.y_train_.dump('failedY')
 
         self.radiuses_ = [self._compute_r(x) for x in X]
 
@@ -125,13 +136,14 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
 
         model.optimize()
-        now = datetime.now()
+        #now = datetime.now()
         # To enable when debugging. If not debugging it just spams
         #model.write(f'{now}_BSVClassifier.mps')
 
         if model.status == GRB.INFEASIBLE:
-            model.computeIIS()
-            model.write(f'{now}_BSVClassifier IIS.ilp')
+            raise
+            # model.computeIIS()
+            # model.write(f'{now}_BSVClassifier IIS.ilp')
 
         best_betas = np.array([v.x for v in model.getVars()], dtype=np.float64)
 
