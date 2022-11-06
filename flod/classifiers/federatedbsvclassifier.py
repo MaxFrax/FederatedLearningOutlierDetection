@@ -36,6 +36,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
     def fit(self, X, y, client_assignment):
 
         clients_x = defaultdict(list)
+        clf = None
 
         for i, x in enumerate(X):
             assignment = client_assignment[i]
@@ -53,6 +54,8 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
                 updates.append(self.client_compute_update(model, clients_x[c_ix]))
 
             model, clf = self.global_combine(model, updates)
+
+        self.clf = clf
 
         return self
 
@@ -109,12 +112,12 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             'q': [global_model['q']],
             'c': [global_model['c']]
         }
-        search_params['q'].extend(uniform(loc=0, scale=1).rvs(size=10))
-        search_params['c'].extend(uniform(loc=.2, scale=.8).rvs(size=10))
+        search_params['q'].extend(uniform(loc=0, scale=1).rvs(size=3))
+        search_params['c'].extend(uniform(loc=.2, scale=.8).rvs(size=3))
         
         # Performs model selection over this new dataset
         test_fold = [0 if v < len(X) else 1 for v in range(len(X) * 2)]
-        clf = GridSearchCV(BSVClassifier(outlier_class_label=self.outlier_class_label, normal_class_label=self.normal_class_label), search_params, cv=PredefinedSplit(test_fold=test_fold), n_jobs=1, scoring='completeness_score', refit=True, return_train_score=False, error_score='raise', verbose=1)
+        clf = GridSearchCV(BSVClassifier(outlier_class_label=self.outlier_class_label, normal_class_label=self.normal_class_label), search_params, cv=PredefinedSplit(test_fold=test_fold), n_jobs=4, scoring='completeness_score', refit=True, return_train_score=False, error_score='raise')
         clf.fit(np.concatenate((X,X)), np.concatenate((y,y)))
         
         # Filter and keep only the support vectors
@@ -134,9 +137,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         }, clf.best_estimator_
 
     def decision_function(self, X):
-        # TODO what is the federated learning decision function? Probably the same as bsvclassifier
-        return np.random.rand(len(X))
+        return self.clf.decision_function(X)
 
     def score_samples(self, X):
-        # TODO what is the federated learning decision function? Probably the same as bsvclassifier
-        return np.random.rand(len(X))
+        return self.clf.score_samples(X)
