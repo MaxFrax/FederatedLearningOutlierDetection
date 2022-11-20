@@ -9,11 +9,10 @@ from scipy.stats import uniform
 
 class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
 
-    def __init__(self, client_fraction:float = 1, batch_size:int = -1, total_clients:int = 10, max_rounds: int = 10, normal_class_label:int=0, outlier_class_label:int=1):
+    def __init__(self, client_fraction:float = 1, total_clients:int = 10, max_rounds: int = 10, normal_class_label:int=0, outlier_class_label:int=1):
         self.normal_class_label = normal_class_label
         self.outlier_class_label = outlier_class_label
         self.client_fraction = client_fraction # Known as C in the reference paper
-        self.batch_size = batch_size # Known as B in the reference paper
         self.total_clients = total_clients # Known as K in the paper
         self.max_rounds = max_rounds
 
@@ -25,7 +24,6 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         self.__dict__ = state
 
     def init_server_model(self, dimensions_count):
-        # TODO is it a good idea to keep this fixed and not random? Should initial state be an hyper parameter?
         return {
             'q': 0.01,
             'c': 1,
@@ -33,14 +31,16 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             'xs': np.empty(shape=(0, dimensions_count))
     }
 
-    def fit(self, X, y, client_assignment):
+    def fit(self, X, Y, client_assignment):
 
         clients_x = defaultdict(list)
+        clients_y = defaultdict(list)
         clf = None
 
         for i, x in enumerate(X):
             assignment = client_assignment[i]
             clients_x[assignment].append(x)
+            clients_y[assignment].append(Y[i])
 
         model = self.init_server_model(X.shape[1])
 
@@ -51,7 +51,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             updates = []
 
             for c_ix in clients_ix:
-                updates.append(self.client_compute_update(model, clients_x[c_ix]))
+                updates.append(self.client_compute_update(model, clients_x[c_ix], clients_y[c_ix]))
 
             model, clf = self.global_combine(model, updates)
 
@@ -62,25 +62,27 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
     def predict(self, X):
         return np.random.choice([self.normal_class_label, self.outlier_class_label], len(X))
 
-    def client_compute_update(self, global_model, client_data):
-        # TODO add support for batch size B, like in Algorithm 1 of the paper
+    def client_compute_update(self, global_model, client_data_x, client_data_y):
         # Concat points from server and from client
-        X = np.concatenate((global_model['xs'], client_data))
+        X = np.concatenate((global_model['xs'], client_data_x))
+        y = np.array([self.outlier_class_label if np.isclose(b, global_model['c']) else self.normal_class_label for b in global_model['betas']])
+        y = np.concatenate((y, client_data_y))
 
         # Init the classifier with q and C from server
-        clf = BSVClassifier(q=global_model['q'], c=global_model['c'])
+        clf = BSVClassifier(q=global_model['q'], c=global_model['c'], normal_class_label=1, outlier_class_label=-1)
 
         # Train locally
-        clf.fit(X, [0]*len(X))
+        clf.fit(X, y)
 
         # Select only the positive betas related from client_data
         client_betas = clf.betas_[len(global_model['xs']):]
-        assert(len(client_betas) == len(client_data))
+        client_xs = clf.X_train_[len(global_model['xs']):]
+        assert(len(client_betas) == len(client_xs))
 
         xs = []
         betas = []
         
-        for _, t in enumerate(zip(client_betas, client_data)):
+        for _, t in enumerate(zip(client_betas, client_xs)):
             b, x = t
             if not np.isclose(b, 0):
                 xs.append(x)
@@ -102,10 +104,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             X = np.concatenate((X, xs))
             betas = np.concatenate((betas, bs))
 
-        # TODO che senso ha prendere i beta e compararli con global c quando loro stessi si sono trovati una c?
-        #y = np.array([self.outlier_class_label if np.isclose(b, global_model['c']) else self.normal_class_label for b in betas])
-        y = np.array([self.normal_class_label for _ in range(len(X))])
-        # TODO: we should get also the betas from the client. When a we receive a BSV, b = global C, we should give it y = outlier. The others have y = inlier
+        y = np.array([self.outlier_class_label if np.isclose(b, global_model['c']) else self.normal_class_label for b in betas])
 
         # Let's try also old hyper parameters. Notice: C is missing
         search_params = {
@@ -117,7 +116,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         
         # Performs model selection over this new dataset
         test_fold = [0 if v < len(X) else 1 for v in range(len(X) * 2)]
-        clf = GridSearchCV(BSVClassifier(outlier_class_label=self.outlier_class_label, normal_class_label=self.normal_class_label), search_params, cv=PredefinedSplit(test_fold=test_fold), n_jobs=4, scoring='completeness_score', refit=True, return_train_score=False, error_score='raise')
+        clf = GridSearchCV(BSVClassifier(outlier_class_label=self.outlier_class_label, normal_class_label=self.normal_class_label), search_params, cv=PredefinedSplit(test_fold=test_fold), n_jobs=4, scoring='average_precision', refit=True, return_train_score=False, error_score='raise')
         clf.fit(np.concatenate((X,X)), np.concatenate((y,y)))
         
         # Filter and keep only the support vectors
