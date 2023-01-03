@@ -38,6 +38,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         # Input validation
         assert len(X) > 0, f'You cannot fit with X of length 0'
         assert len(y) > 0, f'You cannot fit with y of length 0'
+        assert self.c >= 1 / len(X), f'c must be at least {1 / len(X)} to satisfy the constraint on the betas'
 
         self.X_ = X
         self.y_ = y
