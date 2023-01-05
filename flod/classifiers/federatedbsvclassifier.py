@@ -32,6 +32,8 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
     }
 
     def fit(self, X, Y, client_assignment):
+        # Debug
+        self.sv_count = []
 
         clients_x = defaultdict(list)
         clients_y = defaultdict(list)
@@ -44,16 +46,20 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
 
         model = self.init_server_model(X.shape[1])
 
-        for _ in range(self.max_rounds):
+        for r in range(self.max_rounds):
             selected_clients_count = max(1, self.total_clients * self.client_fraction)
             clients_ix = np.random.choice(range(self.total_clients), int(selected_clients_count))
 
             updates = []
 
             for c_ix in clients_ix:
-                updates.append(self.client_compute_update(model, clients_x[c_ix], clients_y[c_ix]))
+                data_per_round = int(len(clients_x[c_ix])/self.max_rounds)
+                updates.append(self.client_compute_update(model, clients_x[c_ix][r*data_per_round: (r+1)*data_per_round], clients_y[c_ix][r*data_per_round: (r+1)*data_per_round]))
 
             model, clf = self.global_combine(model, updates)
+
+            # Debug
+            self.sv_count.append(np.count_nonzero(clf.betas_))
 
         self.clf = clf
 
@@ -69,6 +75,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         y = np.concatenate((y, client_data_y))
 
         # Init the classifier with q and C from server
+        # TODO probably should look for q and c in the client, send them to the server and average them server wise. Or grid search among them
         clf = BSVClassifier(q=global_model['q'], c=global_model['c'], normal_class_label=1, outlier_class_label=-1)
 
         # Train locally
@@ -89,7 +96,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
                 betas.append(b)
 
         if len(xs) == 0:
-            print('There is no client update. No betas far from zero')
+            print(f'There is no client update. No betas far from zero among all the {len(client_xs)} points')
         
         return np.array(xs), np.array(betas)
 
@@ -127,7 +134,6 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             if not np.isclose(b, 0):
                 xs.append(x)
                 betas.append(b)
-                
         return {
             'q': clf.best_estimator_.q,
             'c': clf.best_estimator_.c,
