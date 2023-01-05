@@ -20,8 +20,6 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         self.betas_ = None
         self.constant_term_ = None
         self.radiuses_ = None
-        self.sv_i = None
-        self.sv_ = None
         self.normal_class_label = normal_class_label
         self.outlier_class_label = outlier_class_label
 
