@@ -1,20 +1,25 @@
 import numpy as np
+import logging
 from ..classifiers.bsvclassifier import BSVClassifier
 from sklearn.model_selection import GridSearchCV, PredefinedSplit
 from sklearn.base import BaseEstimator, ClassifierMixin
 from collections import defaultdict
 from scipy.stats import uniform
 
+# TODO replace all the print instances with logger calls
+LOGGER = logging.getLogger(__name__)
+
 # Reference paper: Communication-Efficient Learning of Deep Network from Decentralized Data
 
 class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
 
-    def __init__(self, client_fraction:float = 1, total_clients:int = 10, max_rounds: int = 10, normal_class_label:int=0, outlier_class_label:int=1):
+    def __init__(self, client_fraction:float = 1, total_clients:int = 10, max_rounds: int = 10, normal_class_label:int=0, outlier_class_label:int=1, B:int = 10):
         self.normal_class_label = normal_class_label
         self.outlier_class_label = outlier_class_label
         self.client_fraction = client_fraction # Known as C in the reference paper
         self.total_clients = total_clients # Known as K in the paper
         self.max_rounds = max_rounds
+        self.B = B
 
     def __getstate__(self) -> dict:
         state = self.__dict__
@@ -47,14 +52,24 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         model = self.init_server_model(X.shape[1])
 
         for r in range(self.max_rounds):
+            print(f'Round {r}')
             selected_clients_count = max(1, self.total_clients * self.client_fraction)
             clients_ix = np.random.choice(range(self.total_clients), int(selected_clients_count))
 
             updates = []
 
             for c_ix in clients_ix:
-                data_per_round = int(len(clients_x[c_ix])/self.max_rounds)
-                updates.append(self.client_compute_update(model, clients_x[c_ix][r*data_per_round: (r+1)*data_per_round], clients_y[c_ix][r*data_per_round: (r+1)*data_per_round]))
+                round_client_x = []
+                round_client_y = []
+
+                if len(clients_x[c_ix]) < self.B:
+                    print(f'Client run {c_ix} ran out of data')
+                    continue
+
+                for _ in range(self.B):
+                    round_client_x.append(clients_x[c_ix].pop())
+                    round_client_y.append(clients_y[c_ix].pop())
+                updates.append(self.client_compute_update(c_ix, model, round_client_x , round_client_y))
 
             model, clf = self.global_combine(model, updates)
 
@@ -68,15 +83,25 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
     def predict(self, X):
         return np.random.choice([self.normal_class_label, self.outlier_class_label], len(X))
 
-    def client_compute_update(self, global_model, client_data_x, client_data_y):
+    def client_compute_update(self, index, global_model, client_data_x, client_data_y):
+
+        if len(client_data_x) == 0:
+            print(f'Client run {index} ran out of data')
+            return np.empty(shape=(0, )), np.empty(shape=(0, ))
+
         # Concat points from server and from client
         X = np.concatenate((global_model['xs'], client_data_x))
         y = np.array([self.outlier_class_label if np.isclose(b, global_model['c']) else self.normal_class_label for b in global_model['betas']])
         y = np.concatenate((y, client_data_y))
 
+        if self.normal_class_label not in y:
+            print(f'Client {index} does not have normal class datapoints among the {len(client_data_x)} points')
+            return np.empty(shape=(0, )), np.empty(shape=(0, ))
+
         # Init the classifier with q and C from server
         # TODO probably should look for q and c in the client, send them to the server and average them server wise. Or grid search among them
         clf = BSVClassifier(q=global_model['q'], c=global_model['c'], normal_class_label=1, outlier_class_label=-1)
+
 
         # Train locally
         clf.fit(X, y)
@@ -119,7 +144,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             'c': [global_model['c']]
         }
         search_params['q'].extend(uniform(loc=0, scale=1).rvs(size=3))
-        search_params['c'].extend(uniform(loc=.2, scale=.8).rvs(size=3))
+        search_params['c'].extend(uniform(loc=1/len(X), scale=1).rvs(size=3))
         
         # Performs model selection over this new dataset
         test_fold = [0 if v < len(X) else 1 for v in range(len(X) * 2)]
