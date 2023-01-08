@@ -58,7 +58,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
                 self.X_train_, self.y_train_, self.c, self.q)
         except:
             LOGGER.error(f'c: {self.c}')
-            LOGGER.error(f'q: {self.c}')
+            LOGGER.error(f'q: {self.q}')
             LOGGER.error(f'normale: {self.normal_class_label}')
             LOGGER.error(f'outlier: {self.outlier_class_label}')
             LOGGER.error(f'X len {self.X_train_.shape}')
