@@ -1,13 +1,23 @@
 import numpy as np
 import logging
+import sys
 from ..classifiers.bsvclassifier import BSVClassifier
 from sklearn.model_selection import GridSearchCV, PredefinedSplit
 from sklearn.base import BaseEstimator, ClassifierMixin
 from collections import defaultdict
 from scipy.stats import uniform
 
-# TODO replace all the print instances with logger calls
 LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel(level=logging.DEBUG)
+
+fileHandler = logging.FileHandler(filename=f'{__name__}.log')
+fileHandler.setLevel(level=logging.DEBUG)
+
+streamHandler = logging.StreamHandler(stream=sys.stdout)
+streamHandler.setLevel(level=logging.DEBUG)
+
+LOGGER.addHandler(fileHandler)
+LOGGER.addHandler(streamHandler)
 
 # Reference paper: Communication-Efficient Learning of Deep Network from Decentralized Data
 
@@ -52,41 +62,47 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         model = self.init_server_model(X.shape[1])
 
         for r in range(self.max_rounds):
-            print(f'Round {r}')
+            LOGGER.debug(f'Round {r} of {self.max_rounds}')
             selected_clients_count = max(1, self.total_clients * self.client_fraction)
-            clients_ix = np.random.choice(range(self.total_clients), int(selected_clients_count))
+            clients_ix = np.random.choice(range(self.total_clients), int(selected_clients_count), replace=False)
+
+            LOGGER.debug(f'Selected clients {clients_ix}')
 
             updates = []
 
             for c_ix in clients_ix:
                 round_client_x = []
                 round_client_y = []
+                
+                if r*self.B < len(clients_x[c_ix]):
+                    lowerbound = min(r * self.B, len(clients_x[c_ix]))
+                    upperbound = max((r+1) * self.B, len(clients_x[c_ix]))
+                    round_client_x = clients_x[c_ix][lowerbound:upperbound]
+                    round_client_y = clients_y[c_ix][lowerbound:upperbound]
 
-                if len(clients_x[c_ix]) < self.B:
-                    print(f'Client run {c_ix} ran out of data')
-                    continue
-
-                for _ in range(self.B):
-                    round_client_x.append(clients_x[c_ix].pop())
-                    round_client_y.append(clients_y[c_ix].pop())
-                updates.append(self.client_compute_update(c_ix, model, round_client_x , round_client_y))
+                    updates.append(self.client_compute_update(c_ix, model, round_client_x , round_client_y))
+                else:
+                    LOGGER.warning(f'Client run {c_ix} ran out of data')
 
             model, clf = self.global_combine(model, updates)
 
             # Debug
-            self.sv_count.append(np.count_nonzero(clf.betas_))
+            if clf:
+                self.sv_count.append(np.count_nonzero(clf.betas_))
+            else:
+                self.sv_count.append(0)
 
         self.clf = clf
 
         return self
 
     def predict(self, X):
-        return np.random.choice([self.normal_class_label, self.outlier_class_label], len(X))
+        return self.clf.predict(X)
 
     def client_compute_update(self, index, global_model, client_data_x, client_data_y):
 
         if len(client_data_x) == 0:
-            print(f'Client run {index} ran out of data')
+            LOGGER.warning(f'Client run {index} ran out of data')
             return np.empty(shape=(0, )), np.empty(shape=(0, ))
 
         # Concat points from server and from client
@@ -95,7 +111,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         y = np.concatenate((y, client_data_y))
 
         if self.normal_class_label not in y:
-            print(f'Client {index} does not have normal class datapoints among the {len(client_data_x)} points')
+            LOGGER.warning(f'Client {index} does not have normal class datapoints among the {len(client_data_x)} points')
             return np.empty(shape=(0, )), np.empty(shape=(0, ))
 
         # Init the classifier with q and C from server
@@ -121,7 +137,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
                 betas.append(b)
 
         if len(xs) == 0:
-            print(f'There is no client update. No betas far from zero among all the {len(client_xs)} points')
+            LOGGER.warning(f'There is no client {index} update. No betas far from zero among all the {len(client_xs)} points')
         
         return np.array(xs), np.array(betas)
 
@@ -143,12 +159,18 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             'q': [global_model['q']],
             'c': [global_model['c']]
         }
+
+        if len(X) == 0:
+            LOGGER.warning("No datapoints after combining global model and client update. Is everything okay?")
+            return global_model, None
+
+        # TODO q should go from minimum proposed in 4.2 of svc paper to current +- 1
         search_params['q'].extend(uniform(loc=0, scale=1).rvs(size=3))
         search_params['c'].extend(uniform(loc=1/len(X), scale=1).rvs(size=3))
         
         # Performs model selection over this new dataset
         test_fold = [0 if v < len(X) else 1 for v in range(len(X) * 2)]
-        clf = GridSearchCV(BSVClassifier(outlier_class_label=self.outlier_class_label, normal_class_label=self.normal_class_label), search_params, cv=PredefinedSplit(test_fold=test_fold), n_jobs=4, scoring='average_precision', refit=True, return_train_score=False, error_score='raise')
+        clf = GridSearchCV(BSVClassifier(outlier_class_label=self.outlier_class_label, normal_class_label=self.normal_class_label), search_params, cv=PredefinedSplit(test_fold=test_fold), n_jobs=-1, scoring='average_precision', refit=True, return_train_score=False, error_score='raise')
         clf.fit(np.concatenate((X,X)), np.concatenate((y,y)))
         
         # Filter and keep only the support vectors
@@ -159,6 +181,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             if not np.isclose(b, 0):
                 xs.append(x)
                 betas.append(b)
+
         return {
             'q': clf.best_estimator_.q,
             'c': clf.best_estimator_.c,
@@ -167,7 +190,10 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         }, clf.best_estimator_
 
     def decision_function(self, X):
-        return self.clf.decision_function(X)
+        if self.clf:
+            return self.clf.decision_function(X)
+        else:
+            return np.random.choice([self.normal_class_label, self.outlier_class_label], len(X))
 
     def score_samples(self, X):
         return self.clf.score_samples(X)
