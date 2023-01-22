@@ -40,7 +40,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
 
     def init_server_model(self, dimensions_count):
         return {
-            'q': 0.01,
+            'q': uniform(loc=0, scale=1).rvs(size=1)[0],
             'c': 1,
             'betas': np.empty(shape=(0, )),
             'xs': np.empty(shape=(0, dimensions_count))
@@ -89,10 +89,9 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             # Debug
             if clf:
                 self.sv_count.append(np.count_nonzero(clf.betas_))
+                self.clf = clf
             else:
                 self.sv_count.append(0)
-
-        self.clf = clf
 
         return self
 
