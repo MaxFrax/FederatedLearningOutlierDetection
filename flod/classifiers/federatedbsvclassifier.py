@@ -153,7 +153,6 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
 
         y = np.array([self.outlier_class_label if np.isclose(b, global_model['c']) else self.normal_class_label for b in betas])
 
-        # Let's try also old hyper parameters. Notice: C is missing
         search_params = {
             'q': [global_model['q']],
             'c': [global_model['c']]
@@ -189,9 +188,9 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         }, clf.best_estimator_
 
     def decision_function(self, X):
-        if self.clf:
+        try:
             return self.clf.decision_function(X)
-        else:
+        except:
             return np.random.choice([self.normal_class_label, self.outlier_class_label], len(X))
 
     def score_samples(self, X):
