@@ -1,11 +1,15 @@
 # FederatedLearningOutlierDetection
 
-## To launch the project
+- `FLSVDD report.pdf` contains a detailed report of the project's results
+- `jupyter/Evaluation.ipynb` is the notebook on which I computed the aforementioned results
+- `flod/classifiers` contains my implementation of SVDD and FLSVDD
 
-1. **Create** and **activate** an environment with venv python 3.8.2
-1. `python3 -m pip install -r requirements.txt`
-1. `python3 -m flod`
+## How to run
 
-## TODO
+- Install [anaconda](https://www.anaconda.com)
+- Run the notebook
+- Install all the imported packages
 
-1. Create a dockerfile to pack the whole project togheter
+## Note
+
+You need a license of [gurobi](https://www.gurobi.com) to run the experiments
