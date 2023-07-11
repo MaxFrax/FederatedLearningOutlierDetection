@@ -56,6 +56,8 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         try:
             self.betas_, self.constant_term_ = BSVClassifier._solve_optimization_gurobi(
                 self.X_train_, self.y_train_, self.c, self.q)
+        except gp.GurobiError:
+            raise
         except:
             LOGGER.error(f'c: {self.c}')
             LOGGER.error(f'q: {self.q}')
