@@ -100,6 +100,8 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
 
     def client_compute_update(self, index, global_model, client_data_x, client_data_y):
 
+        assert len(client_data_x) == self.B, f'Each client should use a batch at each update. Expected length {self.B}, received {len(client_data_x)}'
+
         if len(client_data_x) == 0:
             LOGGER.warning(f'Client run {index} ran out of data')
             return np.empty(shape=(0, )), np.empty(shape=(0, ))
