@@ -75,8 +75,8 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
                 round_client_y = []
                 
                 if r*self.B < len(clients_x[c_ix]):
-                    lowerbound = min(r * self.B, len(clients_x[c_ix]))
-                    upperbound = max((r+1) * self.B, len(clients_x[c_ix]))
+                    lowerbound = r * self.B
+                    upperbound = min((r+1) * self.B, len(clients_x[c_ix]))
                     round_client_x = clients_x[c_ix][lowerbound:upperbound]
                     round_client_y = clients_y[c_ix][lowerbound:upperbound]
 
