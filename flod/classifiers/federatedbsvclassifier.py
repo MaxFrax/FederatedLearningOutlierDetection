@@ -129,8 +129,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         xs = []
         betas = []
         
-        for _, t in enumerate(zip(client_betas, client_xs)):
-            b, x = t
+        for b, x in zip(client_betas, client_xs):
             if not np.isclose(b, 0):
                 xs.append(x)
                 betas.append(b)
@@ -174,8 +173,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         # Filter and keep only the support vectors
         xs = []
         betas = []
-        for _, t in enumerate(zip(clf.best_estimator_.betas_, X)):
-            b, x = t
+        for b, x in zip(clf.best_estimator_.betas_, X):
             if not np.isclose(b, 0):
                 xs.append(x)
                 betas.append(b)
