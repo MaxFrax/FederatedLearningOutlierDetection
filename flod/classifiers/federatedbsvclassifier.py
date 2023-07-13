@@ -62,7 +62,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         model = self.init_server_model(X.shape[1])
 
         for r in range(self.max_rounds):
-            LOGGER.debug(f'Round {r} of {self.max_rounds}')
+            LOGGER.debug(f'Round {r} of {self.max_rounds-1}')
             selected_clients_count = max(1, self.total_clients * self.client_fraction)
             clients_ix = np.random.choice(range(self.total_clients), int(selected_clients_count), replace=False)
 
