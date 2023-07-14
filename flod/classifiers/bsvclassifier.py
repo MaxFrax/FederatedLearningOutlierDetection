@@ -53,6 +53,8 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         self.X_train_ = np.array(self.X_train_)
         self.y_train_ = np.array(self.y_train_)
 
+        assert len(self.X_train_) > 0, f"There is no normal data for training among the provided {len(X)}"
+
         try:
             self.betas_, self.constant_term_ = BSVClassifier._solve_optimization_gurobi(
                 self.X_train_, self.y_train_, self.c, self.q)
