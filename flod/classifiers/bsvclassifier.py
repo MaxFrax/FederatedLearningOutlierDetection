@@ -43,18 +43,15 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         LOGGER.debug(f'Solving optimization {len(X)} with c {self.c}')
 
-        self.X_train_, self.y_train_, self.X_ignored_ = [], [], []
+        self.X_train_, self.y_train_ = [], []
 
         for i, y in enumerate(y):
             if y == self.normal_class_label:
                 self.y_train_.append(y)
                 self.X_train_.append(X[i])
-            else:
-                self.X_ignored_.append(X[i])
 
         self.X_train_ = np.array(self.X_train_)
         self.y_train_ = np.array(self.y_train_)
-        self.X_ignored_ = np.array(self.X_ignored_)
 
         try:
             self.betas_, self.constant_term_ = BSVClassifier._solve_optimization_gurobi(
