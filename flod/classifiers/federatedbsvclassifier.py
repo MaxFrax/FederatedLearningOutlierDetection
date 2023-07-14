@@ -49,6 +49,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
     def fit(self, X, Y, client_assignment):
         # Debug
         self.sv_count = []
+        self.classifiers = []
 
         clients_x = defaultdict(list)
         clients_y = defaultdict(list)
@@ -62,6 +63,9 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         model = self.init_server_model(X.shape[1])
 
         for r in range(self.max_rounds):
+            # Debug
+            round_classifiers = {'round': r, 'clients': {}}
+
             LOGGER.debug(f'Round {r} of {self.max_rounds-1}')
             selected_clients_count = max(1, self.total_clients * self.client_fraction)
             clients_ix = np.random.choice(range(self.total_clients), int(selected_clients_count), replace=False)
@@ -80,16 +84,17 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
                     round_client_x = clients_x[c_ix][lowerbound:upperbound]
                     round_client_y = clients_y[c_ix][lowerbound:upperbound]
 
-                    updates.append(self.client_compute_update(c_ix, model, round_client_x , round_client_y))
+                    updates.append(self.client_compute_update(c_ix, model, round_client_x , round_client_y, round_classifiers))
                 else:
                     LOGGER.warning(f'Client run {c_ix} ran out of data')
 
             model, clf = self.global_combine(model, updates)
 
-            # Debug
             if clf:
                 self.sv_count.append(np.count_nonzero(clf.betas_))
                 self.clf = clf
+                round_classifiers['global']=clf
+                self.classifiers.append(round_classifiers)
             else:
                 self.sv_count.append(0)
 
@@ -98,9 +103,9 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
     def predict(self, X):
         return self.clf.predict(X)
 
-    def client_compute_update(self, index, global_model, client_data_x, client_data_y):
+    def client_compute_update(self, index, global_model, client_data_x, client_data_y, round_classifiers):
 
-        assert len(client_data_x) == self.B, f'Each client should use a batch at each update. Expected length {self.B}, received {len(client_data_x)}'
+        assert len(client_data_x) <= self.B, f'Each client should use at most a batch at each update. Expected length {self.B}, received {len(client_data_x)}'
 
         if len(client_data_x) == 0:
             LOGGER.warning(f'Client run {index} ran out of data')
@@ -138,6 +143,8 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
 
         if len(xs) == 0:
             LOGGER.warning(f'There is no client {index} update. No betas far from zero among all the {len(client_xs)} points')
+
+        round_classifiers['clients'][index] = clf
         
         return np.array(xs), np.array(betas)
 
