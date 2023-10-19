@@ -160,8 +160,10 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         v = np.sqrt(v)
         return v
 
-    def _best_radius(self) -> float:        
-        return np.average([self._compute_r(x) for x in self.X_train_], weights=[b / self.c for b in self.betas_])
+    def _best_radius(self) -> float:
+        sv = [x for b, x in zip(self.betas_, self.X_train_) if not np.isclose(b, self.c) and not np.isclose(b, 0)]
+        assert len(sv) > 0, 'Cannot compute best radius. Missing support vectors. Maybe something went wrong during training?'
+        return np.average([self._compute_r(x) for x in sv])
 
     def decision_function(self, X):
         #Like sklearn OneClassSVM "Signed distance is positive for an inlier and negative for an outlier.""
