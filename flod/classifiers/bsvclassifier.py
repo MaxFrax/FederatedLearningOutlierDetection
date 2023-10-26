@@ -23,6 +23,8 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         self.normal_class_label = normal_class_label
         self.outlier_class_label = outlier_class_label
 
+        self.classes_ = [self.outlier_class_label, self.normal_class_label]
+
         assert (self.c > 0 and self.c <= 1), f"0 < {self.c} <= 1"
 
     def __getstate__(self) -> dict:
@@ -161,8 +163,12 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         return v
 
     def _best_radius(self) -> float:
+
+        if len(self.X_train_) == 1:
+            return 0
+
         sv = [x for b, x in zip(self.betas_, self.X_train_) if not np.isclose(b, self.c) and not np.isclose(b, 0)]
-        assert len(sv) > 0, 'Cannot compute best radius. Missing support vectors. Maybe something went wrong during training?'
+        assert len(sv) > 0, f'Cannot compute best radius. Missing support vectors among {len(self.X_train_)} datapoints. Maybe something went wrong during training?'
         return np.average([self._compute_r(x) for x in sv])
 
     def decision_function(self, X):

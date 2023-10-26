@@ -6,6 +6,7 @@ from sklearn.model_selection import GridSearchCV, PredefinedSplit
 from sklearn.base import BaseEstimator, ClassifierMixin
 from collections import defaultdict
 from scipy.stats import uniform
+from sklearn.metrics import make_scorer, roc_auc_score, average_precision_score
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(level=logging.DEBUG)
@@ -30,6 +31,8 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         self.total_clients = total_clients # Known as K in the paper
         self.max_rounds = max_rounds
         self.B = B
+
+        self.classes_ = [self.outlier_class_label, self.normal_class_label]
 
     def __getstate__(self) -> dict:
         state = self.__dict__
@@ -60,6 +63,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             clients_x[assignment].append(x)
             clients_y[assignment].append(Y[i])
 
+        clients_lastindex = [0 for _ in range(len(clients_x))]
         model = self.init_server_model(X.shape[1])
 
         for r in range(self.max_rounds):
@@ -78,11 +82,13 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
                 round_client_x = []
                 round_client_y = []
                 
-                if r*self.B < len(clients_x[c_ix]):
-                    lowerbound = r * self.B
-                    upperbound = min((r+1) * self.B, len(clients_x[c_ix]))
+                if clients_lastindex[c_ix] < len(clients_x[c_ix]):
+                    lowerbound = clients_lastindex[c_ix]
+                    upperbound = clients_lastindex[c_ix] + self.B
+                    upperbound = min(upperbound, len(clients_x[c_ix]))
                     round_client_x = clients_x[c_ix][lowerbound:upperbound]
                     round_client_y = clients_y[c_ix][lowerbound:upperbound]
+                    clients_lastindex[c_ix] = upperbound
 
                     updates.append(self.client_compute_update(c_ix, model, round_client_x , round_client_y, round_classifiers))
                 else:
@@ -101,7 +107,10 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         return self
 
     def predict(self, X):
-        return self.clf.predict(X)
+        try:
+            return self.clf.predict(X)
+        except:
+            return np.random.choice([self.normal_class_label, self.outlier_class_label], len(X))
 
     def client_compute_update(self, index, global_model, client_data_x, client_data_y, round_classifiers):
 
@@ -118,6 +127,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
 
         if self.normal_class_label not in y:
             LOGGER.warning(f'Client {index} does not have normal class datapoints among the {len(client_data_x)} points')
+            LOGGER.warning(self.__dict__)
             return np.empty(shape=(0, )), np.empty(shape=(0, ))
 
         # Init the classifier with q and C from server
@@ -176,7 +186,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         
         # Performs model selection over this new dataset
         test_fold = [0 if v < len(X) else 1 for v in range(len(X) * 2)]
-        clf = GridSearchCV(BSVClassifier(outlier_class_label=self.outlier_class_label, normal_class_label=self.normal_class_label), search_params, cv=PredefinedSplit(test_fold=test_fold), n_jobs=-1, scoring='average_precision', refit=True, return_train_score=False, error_score='raise')
+        clf = GridSearchCV(BSVClassifier(outlier_class_label=self.outlier_class_label, normal_class_label=self.normal_class_label), search_params, cv=PredefinedSplit(test_fold=test_fold), n_jobs=-1, scoring=make_scorer(average_precision_score), refit=True, return_train_score=False, error_score='raise')
         clf.fit(np.concatenate((X,X)), np.concatenate((y,y)))
         
         # Filter and keep only the support vectors
