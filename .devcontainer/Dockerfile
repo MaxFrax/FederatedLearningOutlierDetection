@@ -4,7 +4,8 @@ FROM python:3.11-bullseye
 COPY requirements.txt /tmp/pip-tmp/
 RUN pip install --requirement /tmp/pip-tmp/requirements.txt
 
-RUN pip install jupyterlab pandas numpy matplotlib scikit-learn gurobipy
+RUN pip install scikit-learn==1.2.2
+RUN pip install jupyterlab pandas numpy matplotlib gurobipy
 
 COPY gurobi.lic /root/gurobi.lic
 
