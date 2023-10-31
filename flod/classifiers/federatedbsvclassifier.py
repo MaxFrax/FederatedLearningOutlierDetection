@@ -186,7 +186,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         
         # Performs model selection over this new dataset
         test_fold = [0 if v < len(X) else 1 for v in range(len(X) * 2)]
-        clf = GridSearchCV(BSVClassifier(outlier_class_label=self.outlier_class_label, normal_class_label=self.normal_class_label), search_params, cv=PredefinedSplit(test_fold=test_fold), n_jobs=-1, scoring=make_scorer(average_precision_score), refit=True, return_train_score=False, error_score='raise')
+        clf = GridSearchCV(BSVClassifier(outlier_class_label=self.outlier_class_label, normal_class_label=self.normal_class_label), search_params, cv=PredefinedSplit(test_fold=test_fold), n_jobs=2, scoring=make_scorer(average_precision_score), refit=True, return_train_score=False, error_score='raise')
         clf.fit(np.concatenate((X,X)), np.concatenate((y,y)))
         
         # Filter and keep only the support vectors
