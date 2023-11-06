@@ -8,6 +8,8 @@ from sklearn.model_selection import PredefinedSplit, RandomizedSearchCV
 from sklearn.svm import OneClassSVM
 from scipy.stats import uniform
 from sklearn.preprocessing import MinMaxScaler
+from flod.classifiers.bsvclassifier import BSVClassifier
+from experiments.baseline import svm_experiment
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stdout))
@@ -18,7 +20,7 @@ parser = argparse.ArgumentParser(
 
 # add arguments to the parser
 parser.add_argument('experiment', type=str, choices=[
-                    'baseline_sklearn'], help='The experiment to run.')
+                    'baseline_sklearn', 'baseline_svdd'], help='The experiment to run.')
 
 parser.add_argument('--njobs', type=int,
                     help='Number of parallel threads to use.', default=-1)
@@ -28,25 +30,6 @@ parser.add_argument('--log_level', type=str, choices=['DEBUG', 'INFO', 'WARNING'
 
 # parse the arguments
 args = parser.parse_args()
-
-
-def svm_experiment(X: np.ndarray, y: np.array, classifier, distributions, metric: str):
-    scorer = make_scorer(roc_auc_score) if metric == 'roc_auc' else make_scorer(
-        average_precision_score)
-
-    test_fold = [0 if v < len(X) else 1 for v in range(len(X) * 2)]
-
-    search = RandomizedSearchCV(classifier, distributions, cv=PredefinedSplit(
-        test_fold=test_fold), refit=True, n_iter=10, scoring=scorer, n_jobs=args.njobs, error_score='raise')
-
-    res = search.fit(np.concatenate((X, X)), np.concatenate((y, y)))
-
-    cv_results = pd.DataFrame(res.cv_results_)
-    cv_results.sort_values('rank_test_score')
-
-    logger.info(
-        f"{metric}: {np.average(cv_results['mean_test_score']):.4f} ± {np.std(cv_results['mean_test_score']):.4f}")
-
 
 def get_dataset():
     input_names = []
@@ -71,7 +54,7 @@ def get_dataset():
 
 
 def baseline_sklearn():
-    logger.info('Running baseline experiment')
+    logger.info('Running baseline sklearn experiment')
 
     X, y = get_dataset()
 
@@ -79,8 +62,20 @@ def baseline_sklearn():
     distributions = dict(nu=uniform(loc=0.2, scale=0.8),
                          gamma=uniform(loc=0, scale=3))
 
-    svm_experiment(X, y, classifier, distributions, 'roc_auc')
-    svm_experiment(X, y, classifier, distributions, 'average_precision')
+    svm_experiment(X, y, classifier, distributions, 'roc_auc', args.njobs)
+    svm_experiment(X, y, classifier, distributions, 'average_precision', args.njobs)
+
+
+def baseline_svdd():
+    logger.info('Running baseline svdd experiment')
+
+    X, y = get_dataset()
+
+    classifier = BSVClassifier(normal_class_label=1, outlier_class_label=-1)
+    distributions = {'c':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
+
+    svm_experiment(X, y, classifier, distributions, 'roc_auc', args.njobs)
+    svm_experiment(X, y, classifier, distributions, 'average_precision', args.njobs)
 
 
 if args.loglevel:
@@ -88,3 +83,5 @@ if args.loglevel:
 
 if args.experiment == 'baseline_sklearn':
     baseline_sklearn()
+elif args.experiment == 'baseline_svdd':
+    baseline_svdd()
