@@ -9,7 +9,7 @@ from sklearn.svm import OneClassSVM
 from scipy.stats import uniform
 from sklearn.preprocessing import MinMaxScaler
 from flod.classifiers.bsvclassifier import BSVClassifier
-from experiments.baseline import svm_experiment
+from experiments.baseline import svm_experiment_df
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stdout))
@@ -62,8 +62,8 @@ def baseline_sklearn():
     distributions = dict(nu=uniform(loc=0.2, scale=0.8),
                          gamma=uniform(loc=0, scale=3))
 
-    svm_experiment(X, y, classifier, distributions, 'roc_auc', args.njobs)
-    svm_experiment(X, y, classifier, distributions, 'average_precision', args.njobs)
+    print(svm_experiment_df(X, y, classifier, distributions, 'roc_auc', args.njobs))
+    print(svm_experiment_df(X, y, classifier, distributions, 'average_precision', args.njobs))
 
 
 def baseline_svdd():
@@ -74,8 +74,8 @@ def baseline_svdd():
     classifier = BSVClassifier(normal_class_label=1, outlier_class_label=-1)
     distributions = {'c':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
 
-    svm_experiment(X, y, classifier, distributions, 'roc_auc', args.njobs)
-    svm_experiment(X, y, classifier, distributions, 'average_precision', args.njobs)
+    svm_experiment_df(X, y, classifier, distributions, 'roc_auc', args.njobs)
+    svm_experiment_df(X, y, classifier, distributions, 'average_precision', args.njobs)
 
 
 if args.loglevel:
