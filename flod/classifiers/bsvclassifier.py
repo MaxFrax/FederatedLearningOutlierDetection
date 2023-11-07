@@ -71,6 +71,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
             LOGGER.error(f'y len {self.y_train_.shape}')
             self.X_train_.dump('failedX')
             self.y_train_.dump('failedY')
+            raise
 
         self.radiuses_ = [self._compute_r(x) for x in X]
 
@@ -122,6 +123,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         model = gp.Model('WolfeDual')
 
+        model.setParam('OutputFlag', 0)
         model.setParam('TimeLimit', 120)
 
         betas = model.addMVar(len(xs), name="betas", ub=c, lb=0)
