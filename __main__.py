@@ -16,7 +16,13 @@ from sklearn.preprocessing import MinMaxScaler
 from flod.classifiers.bsvclassifier import BSVClassifier
 from experiments.baseline import svm_experiment
 import glob
-from tqdm import tqdm
+
+def get_datasets():
+    datasets = {}
+    for dataset in glob.glob('./datasets/*.csv'):
+        datasets[os.path.splitext(os.path.basename(dataset))[0].replace('-unsupervised-ad','')] = dataset
+
+    return datasets
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stdout))
@@ -35,14 +41,10 @@ parser.add_argument('--njobs', type=int,
 parser.add_argument('--log_level', type=str, choices=['DEBUG', 'INFO', 'WARNING',
                     'ERROR', 'CRITICAL'], help='The logging level.', dest='loglevel', default='INFO')
 
+parser.add_argument('dataset', type=str, choices=get_datasets().keys(), help='The dataset to run the experiment on.')
+
 # parse the arguments
 args = parser.parse_args()
-
-def get_datasets():
-    return [{ 
-        'name': os.path.splitext(os.path.basename(dataset))[0].replace('-unsupervised-ad',''), 
-        'path': dataset
-    } for dataset in glob.glob('./datasets/*.csv')]
 
 
 def get_dataset_from_path(path):
@@ -71,28 +73,25 @@ def baseline_sklearn():
     auc_table = {}
     avg_table = {}
 
-    for dinfo in tqdm(get_datasets()):
+    dinfo = get_datasets()[args.dataset]
 
-        tqdm.write(f'Running experiment for {dinfo["name"]}')
-        X,y = get_dataset_from_path(dinfo['path'])
-        auc_res = svm_experiment(X, y, classifier, distributions, 'roc_auc', args.njobs)
-        auc_table[dinfo['name']] = {
-            classifier.__class__.__name__: f'{auc_res[0]:.4f} ± {auc_res[1]:.4f}'
-        }
+    X,y = get_dataset_from_path(dinfo)
+    auc_res = svm_experiment(X, y, classifier, distributions, 'roc_auc', args.njobs)
+    auc_table[args.dataset] = {
+        classifier.__class__.__name__: f'{auc_res[0]:.4f} ± {auc_res[1]:.4f}'
+    }
 
-        avg_res = svm_experiment(X, y, classifier, distributions, 'average_precision', args.njobs)
-        avg_table[dinfo['name']] = {
-            classifier.__class__.__name__: f'{avg_res[0]:.4f} ± {avg_res[1]:.4f}'
-        }
-
-        auc_df = pd.DataFrame(auc_table)
-        avg_df = pd.DataFrame(avg_table)
-
-        auc_df.to_csv('sklearn_auc.csv')
-        avg_df.to_csv('sklearn_avg.csv')
+    avg_res = svm_experiment(X, y, classifier, distributions, 'average_precision', args.njobs)
+    avg_table[args.dataset] = {
+        classifier.__class__.__name__: f'{avg_res[0]:.4f} ± {avg_res[1]:.4f}'
+    }
 
     auc_df = pd.DataFrame(auc_table)
     avg_df = pd.DataFrame(avg_table)
+
+    auc_df.to_csv('sklearn_auc.csv')
+    avg_df.to_csv('sklearn_avg.csv')
+
     print('AUC')
     print(auc_df)
     print('Average Precision')
@@ -108,28 +107,25 @@ def baseline_svdd():
     auc_table = {}
     avg_table = {}
 
-    for dinfo in tqdm(get_datasets()):
+    dinfo = get_datasets()[args.dataset]
 
-        tqdm.write(f'Running experiment for {dinfo["name"]}')
-        X,y = get_dataset_from_path(dinfo['path'])
-        auc_res = svm_experiment(X, y, classifier, distributions, 'roc_auc', args.njobs)
-        auc_table[dinfo['name']] = {
-            classifier.__class__.__name__: f'{auc_res[0]:.4f} ± {auc_res[1]:.4f}'
-        }
+    X,y = get_dataset_from_path(dinfo)
+    auc_res = svm_experiment(X, y, classifier, distributions, 'roc_auc', args.njobs)
+    auc_table[args.dataset] = {
+        classifier.__class__.__name__: f'{auc_res[0]:.4f} ± {auc_res[1]:.4f}'
+    }
 
-        avg_res = svm_experiment(X, y, classifier, distributions, 'average_precision', args.njobs)
-        avg_table[dinfo['name']] = {
-            classifier.__class__.__name__: f'{avg_res[0]:.4f} ± {avg_res[1]:.4f}'
-        }
-
-        auc_df = pd.DataFrame(auc_table)
-        avg_df = pd.DataFrame(avg_table)
-
-        auc_df.to_csv('svdd_auc.csv')
-        avg_df.to_csv('svdd.csv')
+    avg_res = svm_experiment(X, y, classifier, distributions, 'average_precision', args.njobs)
+    avg_table[args.dataset] = {
+        classifier.__class__.__name__: f'{avg_res[0]:.4f} ± {avg_res[1]:.4f}'
+    }
 
     auc_df = pd.DataFrame(auc_table)
     avg_df = pd.DataFrame(avg_table)
+
+    auc_df.to_csv('svdd_auc.csv')
+    avg_df.to_csv('svdd.csv')
+
     print('AUC')
     print(auc_df)
     print('Average Precision')
