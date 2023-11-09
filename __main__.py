@@ -1,4 +1,3 @@
-from ast import List
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -8,8 +7,6 @@ import sys
 import numpy as np
 import pandas as pd
 import os
-from sklearn.metrics import average_precision_score, make_scorer, roc_auc_score
-from sklearn.model_selection import PredefinedSplit, RandomizedSearchCV
 from sklearn.svm import OneClassSVM
 from scipy.stats import uniform
 from sklearn.preprocessing import MinMaxScaler
@@ -64,30 +61,36 @@ def get_dataset_from_path(path):
     return X, y
 
 def baseline_sklearn():
-    logger.info('Running baseline sklearn experiment')
+    auc_res_path = 'sklearn_auc.csv'
+    avg_res_path = 'sklearn_avg.csv'
+
+    logger.info('Running baseline sklearn experiment on %s', args.dataset)
 
     classifier = OneClassSVM(kernel='rbf')
     distributions = dict(nu=uniform(loc=0.2, scale=0.8),
                          gamma=uniform(loc=0, scale=3))
+    
+    try:
+        auc_df = pd.read_csv(auc_res_path, index_col=0)
+    except FileNotFoundError:
+        auc_df = pd.DataFrame()
 
-    auc_table = {}
-    avg_table = {}
+    try:
+        avg_df = pd.read_csv(avg_res_path, index_col=0)
+    except FileNotFoundError:
+        avg_df = pd.DataFrame()
 
     dinfo = get_datasets()[args.dataset]
 
     X,y = get_dataset_from_path(dinfo)
-    auc_res = svm_experiment(X, y, classifier, distributions, 'roc_auc', args.njobs)
-    auc_table[args.dataset] = {
-        classifier.__class__.__name__: f'{auc_res[0]:.4f} ± {auc_res[1]:.4f}'
-    }
+    res = svm_experiment(X, y, classifier, distributions, args.njobs)
 
-    avg_res = svm_experiment(X, y, classifier, distributions, 'average_precision', args.njobs)
-    avg_table[args.dataset] = {
-        classifier.__class__.__name__: f'{avg_res[0]:.4f} ± {avg_res[1]:.4f}'
+    auc_df[args.dataset] = {
+        classifier.__class__.__name__: f"{res['roc_auc']['mean']:.4f} ± {res['roc_auc']['std']:.4f}"
     }
-
-    auc_df = pd.DataFrame(auc_table)
-    avg_df = pd.DataFrame(avg_table)
+    avg_df[args.dataset] = {
+        classifier.__class__.__name__: f"{res['average_precision']['mean']:.4f} ± {res['average_precision']['std']:.4f}"
+    }
 
     auc_df.to_csv('sklearn_auc.csv')
     avg_df.to_csv('sklearn_avg.csv')
@@ -97,34 +100,39 @@ def baseline_sklearn():
     print('Average Precision')
     print(avg_df)
 
-
 def baseline_svdd():
-    logger.info('Running baseline svdd experiment')
+    auc_res_path = 'svdd_auc.csv'
+    avg_res_path = 'svdd_avg.csv'
+
+    logger.info('Running baseline sklearn experiment on %s', args.dataset)
 
     classifier = BSVClassifier(normal_class_label=1, outlier_class_label=-1)
     distributions = {'c':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
+    
+    try:
+        auc_df = pd.read_csv(auc_res_path, index_col=0)
+    except FileNotFoundError:
+        auc_df = pd.DataFrame()
 
-    auc_table = {}
-    avg_table = {}
+    try:
+        avg_df = pd.read_csv(avg_res_path, index_col=0)
+    except FileNotFoundError:
+        avg_df = pd.DataFrame()
 
     dinfo = get_datasets()[args.dataset]
 
     X,y = get_dataset_from_path(dinfo)
-    auc_res = svm_experiment(X, y, classifier, distributions, 'roc_auc', args.njobs)
-    auc_table[args.dataset] = {
-        classifier.__class__.__name__: f'{auc_res[0]:.4f} ± {auc_res[1]:.4f}'
+    res = svm_experiment(X, y, classifier, distributions, args.njobs)
+
+    auc_df[args.dataset] = {
+        classifier.__class__.__name__: f"{res['roc_auc']['mean']:.4f} ± {res['roc_auc']['std']:.4f}"
+    }
+    avg_df[args.dataset] = {
+        classifier.__class__.__name__: f"{res['average_precision']['mean']:.4f} ± {res['average_precision']['std']:.4f}"
     }
 
-    avg_res = svm_experiment(X, y, classifier, distributions, 'average_precision', args.njobs)
-    avg_table[args.dataset] = {
-        classifier.__class__.__name__: f'{avg_res[0]:.4f} ± {avg_res[1]:.4f}'
-    }
-
-    auc_df = pd.DataFrame(auc_table)
-    avg_df = pd.DataFrame(avg_table)
-
-    auc_df.to_csv('svdd_auc.csv')
-    avg_df.to_csv('svdd.csv')
+    auc_df.to_csv('sklearn_auc.csv')
+    avg_df.to_csv('sklearn_avg.csv')
 
     print('AUC')
     print(auc_df)
