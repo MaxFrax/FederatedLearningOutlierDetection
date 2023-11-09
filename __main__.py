@@ -46,7 +46,7 @@ def baseline_sklearn():
     print(avg_df)
 
 def baseline_svdd():
-    logger.info('Running baseline sklearn experiment on %s', args.dataset)
+    logger.info('Running baseline svdd experiment on %s', args.dataset)
 
     classifier = BSVClassifier(normal_class_label=1, outlier_class_label=-1)
     distributions = {'c':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
