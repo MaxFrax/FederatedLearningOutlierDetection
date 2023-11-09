@@ -110,7 +110,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
             x1, x2): return BSVClassifier._gaussian_kernel(x1, x2, q)
 
         self_kernels = np.array([gaussian_kernel(x_i, x_i) for x_i in xs])
-        kernels = np.empty((len(xs), len(xs)), dtype=np.float16)
+        kernels = np.empty((len(xs), len(xs)), dtype=np.float64)
 
         for i, xi in enumerate(xs):
             for j, xj in enumerate(xs):
