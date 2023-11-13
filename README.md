@@ -6,9 +6,9 @@ TODO
 
 ## Note
 
-You need a license of [gurobi](https://www.gurobi.com) to run the experiments
+You need a license of [gurobi](https://www.gurobi.com) to run the experiments.
 
-## Baseline Results
+## Baseline Results
 
 My algorithms are BSVClassifier and OneClassSVM. Both were run 10 times as it can be seen in the code (commit 3bcddb0)
 
