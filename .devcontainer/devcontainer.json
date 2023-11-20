@@ -8,7 +8,8 @@
 				"GitHub.copilot",
 				"GitHub.copilot-chat",
 				"VisualStudioExptTeam.vscodeintellicode",
-				"VisualStudioExptTeam.intellicode-api-usage-examples"
+				"VisualStudioExptTeam.intellicode-api-usage-examples",
+				"Gruntfuggly.todo-tree"
 			]
         }
     }
