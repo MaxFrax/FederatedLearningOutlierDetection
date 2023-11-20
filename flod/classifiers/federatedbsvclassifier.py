@@ -37,44 +37,15 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             'Ws': np.zeros(self.total_clients)
     }
 
-    def _compute_gamma(self, X, client_assignment):
+    def _compute_gamma(self, X, y, client_assignment):
         gamma = 0
 
-        kernels = np.empty((len(X), len(X)), dtype=np.float64)
-        # TODO compress memory of symmetric matrix. Use a smart class or decopose the matrix
-        # tril, triu
-        for i, xi in enumerate(X):
-            for j, xj in enumerate(X):
-                if j > i:
-                    break
+        clf = BSVClassifier(self.C, self.q, self.normal_class_label, self.outlier_class_label).fit(X, y)
 
-                kern = BSVClassifier._gaussian_kernel(xi, xj, self.q)
-                kernels[i][j] = kern
-                kernels[j][i] = kern
+        # Determine which points belong to which client
+        client_betas = [[] for _ in range(self.total_clients)]
 
-        # Optimize the betas
-        with gp.Model('gamma') as opt:
-            betas = opt.addMVar(shape=len(X), name='betas', ub=self.C, lb=0)
-            sum_betas = opt.addConstr(betas.sum() == 1, name='sum_betas')
-
-            opt.ModelSense = gp.GRB.MINIMIZE
-
-            opt.setParam('ObjScale', -0.5)
-            opt.setParam('NumericFocus', 3)
-            opt.setParam('NonConvex', 2)
-
-            opt.setParam('OutputFlag', 0)
-            opt.setParam('TimeLimit', 120)
-
-            opt.setObjective(betas @ kernels @ betas)
-
-            opt.optimize()
-
-            # Determine which points belong to which client
-            best_betas = np.array([v.x for v in opt.getVars()], dtype=np.float64)
-            client_betas = [[] for _ in range(self.total_clients)]
-
-        for i, beta in enumerate(best_betas):
+        for i, beta in enumerate(clf.betas_):
             client_betas[client_assignment[i]].append((i, beta))
         
         # Compute norm of client 0
@@ -83,7 +54,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         for i, b1 in client_betas[0]:
             sum_beta0 += b1
             for j, b2 in client_betas[0]:
-                norm0 += b1 * b2 * kernels[i][j]
+                norm0 += b1 * b2 * BSVClassifier._gaussian_kernel(X[i], X[j], self.q)
         norm0 = np.sqrt(norm0)
         # Compute norm of client 1
         norm1 = 0
@@ -91,20 +62,20 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         for i, b1 in client_betas[1]:
             sum_beta1 += b1
             for j, b2 in client_betas[1]:
-                norm1 += b1 * b2 * kernels[i][j]
+                norm1 += b1 * b2 * BSVClassifier._gaussian_kernel(X[i], X[j], self.q)
         norm1 = np.sqrt(norm1)
         # Compute inner product of client 0 and client 1
         inner_product = 0
         for i, b1 in client_betas[0]:
             for j, b2 in client_betas[1]:
-                inner_product += b1 * b2 * kernels[i][j]
+                inner_product += b1 * b2 * BSVClassifier._gaussian_kernel(X[i], X[j], self.q)
 
         # Compute gamma
         gamma = (norm0 * norm1) - inner_product
 
-        return gamma, [sum_beta0, sum_beta1], [norm0, norm1]
+        return gamma, [sum_beta0, sum_beta1], [norm0, norm1], clf
 
-    def fit(self, X, Y, client_assignment, round_callback):
+    def fit(self, X, y, client_assignment, round_callback):
         self.debug = []
 
         clients_x = defaultdict(list)
@@ -114,10 +85,10 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         for i, x in enumerate(X):
             assignment = client_assignment[i]
             clients_x[assignment].append(x)
-            clients_y[assignment].append(Y[i])
+            clients_y[assignment].append(y[i])
 
         model = self.init_server_model()
-        self.gamma, self.opt_betas, opt_norms = self._compute_gamma(X, client_assignment)
+        self.gamma, self.opt_betas, _, _ = self._compute_gamma(X, y, client_assignment)
         model['sum_betas'] = np.array(self.opt_betas)
 
         r = 0
