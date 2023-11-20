@@ -1,36 +1,24 @@
+from math import nan
+from typing import Callable
+from flod.classifiers.bsvclassifier import BSVClassifier
 import numpy as np
 import logging
-import sys
-from ..classifiers.bsvclassifier import BSVClassifier
-from sklearn.model_selection import GridSearchCV, PredefinedSplit
+import gurobipy as gp
 from sklearn.base import BaseEstimator, ClassifierMixin
 from collections import defaultdict
-from scipy.stats import uniform
-from sklearn.metrics import make_scorer, roc_auc_score, average_precision_score
 
 LOGGER = logging.getLogger(__name__)
-LOGGER.setLevel(level=logging.DEBUG)
-
-fileHandler = logging.FileHandler(filename=f'{__name__}.log')
-fileHandler.setLevel(level=logging.DEBUG)
-
-streamHandler = logging.StreamHandler(stream=sys.stdout)
-streamHandler.setLevel(level=logging.DEBUG)
-
-LOGGER.addHandler(fileHandler)
-LOGGER.addHandler(streamHandler)
-
-# Reference paper: Communication-Efficient Learning of Deep Network from Decentralized Data
 
 class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
 
-    def __init__(self, client_fraction:float = 1, total_clients:int = 10, max_rounds: int = 10, normal_class_label:int=0, outlier_class_label:int=1, B:int = 10):
+    def __init__(self, max_rounds: int = 10, normal_class_label:int=0, outlier_class_label:int=1, q:float=1, C:float=1):
         self.normal_class_label = normal_class_label
         self.outlier_class_label = outlier_class_label
-        self.client_fraction = client_fraction # Known as C in the reference paper
-        self.total_clients = total_clients # Known as K in the paper
+        self.client_fraction = 1
+        self.total_clients = 2
         self.max_rounds = max_rounds
-        self.B = B
+        self.q = q
+        self.C = C
 
         self.classes_ = [self.outlier_class_label, self.normal_class_label]
 
@@ -41,36 +29,106 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
     def __setstate__(self, state):
         self.__dict__ = state
 
-    def init_server_model(self, dimensions_count):
+    def init_server_model(self):
         return {
-            'q': uniform(loc=0, scale=1).rvs(size=1)[0],
-            'c': 1,
-            'betas': np.empty(shape=(0, )),
-            'xs': np.empty(shape=(0, dimensions_count))
+            # 'sum_betas': np.full(self.total_clients, 1/self.total_clients),
+            'sum_betas': np.array([0.0, 1.0]),
+            'f_norms': np.zeros(self.total_clients),
+            'Ws': np.zeros(self.total_clients)
     }
 
-    def fit(self, X, Y, client_assignment):
-        # Debug
-        self.sv_count = []
-        self.classifiers = []
+    def _compute_gamma(self, X, client_assignment):
+        gamma = 0
+
+        kernels = np.empty((len(X), len(X)), dtype=np.float64)
+        # TODO compress memory of symmetric matrix. Use a smart class or decopose the matrix
+        # tril, triu
+        for i, xi in enumerate(X):
+            for j, xj in enumerate(X):
+                if j > i:
+                    break
+
+                kern = BSVClassifier._gaussian_kernel(xi, xj, self.q)
+                kernels[i][j] = kern
+                kernels[j][i] = kern
+
+        # Optimize the betas
+        with gp.Model('gamma') as opt:
+            betas = opt.addMVar(shape=len(X), name='betas', ub=self.C, lb=0)
+            sum_betas = opt.addConstr(betas.sum() == 1, name='sum_betas')
+
+            opt.ModelSense = gp.GRB.MINIMIZE
+
+            opt.setParam('ObjScale', -0.5)
+            opt.setParam('NumericFocus', 3)
+            opt.setParam('NonConvex', 2)
+
+            opt.setParam('OutputFlag', 0)
+            opt.setParam('TimeLimit', 120)
+
+            opt.setObjective(betas @ kernels @ betas)
+
+            opt.optimize()
+
+            # Determine which points belong to which client
+            best_betas = np.array([v.x for v in opt.getVars()], dtype=np.float64)
+            client_betas = [[] for _ in range(self.total_clients)]
+
+        for i, beta in enumerate(best_betas):
+            client_betas[client_assignment[i]].append((i, beta))
+        
+        # Compute norm of client 0
+        norm0 = 0
+        sum_beta0 = 0
+        for i, b1 in client_betas[0]:
+            sum_beta0 += b1
+            for j, b2 in client_betas[0]:
+                norm0 += b1 * b2 * kernels[i][j]
+        norm0 = np.sqrt(norm0)
+        # Compute norm of client 1
+        norm1 = 0
+        sum_beta1 = 0
+        for i, b1 in client_betas[1]:
+            sum_beta1 += b1
+            for j, b2 in client_betas[1]:
+                norm1 += b1 * b2 * kernels[i][j]
+        norm1 = np.sqrt(norm1)
+        # Compute inner product of client 0 and client 1
+        inner_product = 0
+        for i, b1 in client_betas[0]:
+            for j, b2 in client_betas[1]:
+                inner_product += b1 * b2 * kernels[i][j]
+
+        # Compute gamma
+        gamma = (norm0 * norm1) - inner_product
+
+        return gamma, [sum_beta0, sum_beta1], [norm0, norm1]
+
+    def fit(self, X, Y, client_assignment, round_callback):
+        self.debug = []
 
         clients_x = defaultdict(list)
         clients_y = defaultdict(list)
-        clf = None
 
+        # Divides data among clients
         for i, x in enumerate(X):
             assignment = client_assignment[i]
             clients_x[assignment].append(x)
             clients_y[assignment].append(Y[i])
 
-        clients_lastindex = [0 for _ in range(len(clients_x))]
-        model = self.init_server_model(X.shape[1])
+        model = self.init_server_model()
+        self.gamma, self.opt_betas, opt_norms = self._compute_gamma(X, client_assignment)
+        model['sum_betas'] = np.array(self.opt_betas)
 
-        for r in range(self.max_rounds):
-            # Debug
-            round_classifiers = {'round': r, 'clients': {}}
+        r = 0
+        converged = False
+        while r < self.max_rounds and not converged:
+            #LOGGER.debug(f'Round {r} of {self.max_rounds-1}. Ws: {model["Ws"]}')
+            print(f'Round {r} of {self.max_rounds-1}. Ws: {model["Ws"]}')
+            r+=1
 
-            LOGGER.debug(f'Round {r} of {self.max_rounds-1}')
+            # Selects clients to participate in this round
+            # Its a feature for the future. As of today clients are always 0 and 1 at each round.
             selected_clients_count = max(1, self.total_clients * self.client_fraction)
             clients_ix = np.random.choice(range(self.total_clients), int(selected_clients_count), replace=False)
 
@@ -79,136 +137,136 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             updates = []
 
             for c_ix in clients_ix:
-                round_client_x = []
-                round_client_y = []
-                
-                if clients_lastindex[c_ix] < len(clients_x[c_ix]):
-                    lowerbound = clients_lastindex[c_ix]
-                    upperbound = clients_lastindex[c_ix] + self.B
-                    upperbound = min(upperbound, len(clients_x[c_ix]))
-                    round_client_x = clients_x[c_ix][lowerbound:upperbound]
-                    round_client_y = clients_y[c_ix][lowerbound:upperbound]
-                    clients_lastindex[c_ix] = upperbound
+                updates.append(self.client_compute_update(c_ix, model, clients_x[c_ix], clients_y[c_ix]))
 
-                    updates.append(self.client_compute_update(c_ix, model, round_client_x , round_client_y, round_classifiers))
-                else:
-                    LOGGER.warning(f'Client run {c_ix} ran out of data')
+            model, converged = self.global_combine(r, model, updates)
+            round_callback(self.debug)
 
-            model, clf = self.global_combine(model, updates)
+        print("\nFit over\n")
+        print(model)
 
-            if clf:
-                self.sv_count.append(np.count_nonzero(clf.betas_))
-                self.clf = clf
-                round_classifiers['global']=clf
-                self.classifiers.append(round_classifiers)
-            else:
-                self.sv_count.append(0)
+        # TODO train estimator for each client
 
         return self
 
     def predict(self, X):
-        try:
-            return self.clf.predict(X)
-        except:
-            return np.random.choice([self.normal_class_label, self.outlier_class_label], len(X))
+        raise NotImplementedError('score_samples is not implemented for FederatedBSVClassifier')
 
-    def client_compute_update(self, index, global_model, client_data_x, client_data_y, round_classifiers):
+    def client_compute_update(self, index, global_model, client_data_x, client_data_y):
 
-        assert len(client_data_x) <= self.B, f'Each client should use at most a batch at each update. Expected length {self.B}, received {len(client_data_x)}'
+        assert len(client_data_x) >= 0, f'Client {index} does not have any data to compute its update'
 
-        if len(client_data_x) == 0:
-            LOGGER.warning(f'Client run {index} ran out of data')
-            return np.empty(shape=(0, )), np.empty(shape=(0, ))
+        kernels = np.empty((len(client_data_x), len(client_data_x)), dtype=np.float64)
 
-        # Concat points from server and from client
-        X = np.concatenate((global_model['xs'], client_data_x))
-        y = np.array([self.outlier_class_label if np.isclose(b, global_model['c']) else self.normal_class_label for b in global_model['betas']])
-        y = np.concatenate((y, client_data_y))
+        # TODO compress memory of symmetric matrix. Use a smart class or decopose the matrix
+        # tril, triu
+        for i, xi in enumerate(client_data_x):
+            for j, xj in enumerate(client_data_x):
+                if j > i:
+                    break
 
-        if self.normal_class_label not in y:
-            LOGGER.warning(f'Client {index} does not have normal class datapoints among the {len(client_data_x)} points')
-            LOGGER.warning(self.__dict__)
-            return np.empty(shape=(0, )), np.empty(shape=(0, ))
+                kern = BSVClassifier._gaussian_kernel(xi, xj, self.q)
+                kernels[i][j] = kern
+                kernels[j][i] = kern
 
-        # Init the classifier with q and C from server
-        # TODO probably should look for q and c in the client, send them to the server and average them server wise. Or grid search among them
-        clf = BSVClassifier(q=global_model['q'], c=global_model['c'], normal_class_label=1, outlier_class_label=-1)
+        with gp.Model(f'Client_{index}') as opt:
+            # Parameters configuration
+            opt.setParam('ObjScale', -0.5)
+            opt.setParam('NumericFocus', 3)
+            opt.setParam('NonConvex', 2)
+
+            opt.setParam('OutputFlag', 0)
+            opt.setParam('TimeLimit', 240)
+            
+            opt.ModelSense = gp.GRB.MINIMIZE
+
+            # Variables
+            betas = opt.addMVar(shape=len(client_data_x), name='betas', ub=self.C, lb=0)
+            root = opt.addVar(name='root')
+            inner_product = opt.addVar(name='inner_product', lb=0)
+
+            # Constraints
+            sum_betas = opt.addConstr(betas.sum() == global_model['sum_betas'][index], name='sum_betas')
+            opt.addConstr(inner_product == betas @ kernels @ betas)
+            opt.addGenConstrPow(root, inner_product, .5, "square_root")
 
 
-        # Train locally
-        clf.fit(X, y)
+            other_client_norm = global_model['f_norms'][(index+1)%2]
 
-        # Select only the positive betas related from client_data
-        client_betas = clf.betas_[len(global_model['xs']):]
-        client_xs = clf.X_train_[len(global_model['xs']):]
-        assert(len(client_betas) == len(client_xs))
+            # DEBUG trying to add norm squared
+            opt.setObjective(inner_product + 2 * other_client_norm * root -2*self.gamma + other_client_norm**2)
+            opt.optimize()
 
-        xs = []
-        betas = []
+            try:
+                W = opt.objVal
+                norm = root.x
+
+                # DEBUG
+                if index == 0:
+                    self.betas0 = [b for b in betas.x]
+                    self.fc0 = lambda x: sum([b *  BSVClassifier._gaussian_kernel(x, xj, self.q) for xj, b in zip(client_data_x, self.betas0)])
+                    self.radiuses0 = [self.fc0(s) for s, b in zip(client_data_x, self.betas0) if b > 0 and b < self.C]
+                elif index == 1:
+                    self.betas1 = [b for b in betas.x]
+                    self.fc1 = lambda x: sum([b *  BSVClassifier._gaussian_kernel(x, xj, self.q) for xj, b in zip(client_data_x, self.betas1)])
+                    self.radiuses1 = [self.fc1(s) for s, b in zip(client_data_x, self.betas1) if b > 0 and b < self.C]
+
+            except:
+                codes = {
+                    "1": "OPTIMAL",
+                    "2": "INFEASIBLE",
+                    "3": "INF_OR_UNBD",
+                    "4": "INFEASIBLE_OR_UNBOUNDED",
+                    "5": "UNBOUNDED",
+                    "6": "CUTOFF",
+                    "7": "ITERATION_LIMIT",
+                    "8": "NODE_LIMIT",
+                    "9": "TIME_LIMIT",
+                    "10": "SOLUTION_LIMIT",
+                    "11": "INTERRUPTED",
+                    "12": "NUMERIC",
+                    "13": "SUBOPTIMAL",
+                    "14": "INPROGRESS",
+                    "15": "USER_OBJ_LIMIT"
+                }
+                print(f'Client {index} failed to optimize. Status: {codes[str(opt.Status)]}')
+                W = nan
+                norm = nan
+                raise
+
+        return W, norm
+
+    def global_combine(self, round, global_model, client_updates):
+        model = global_model
+        model['Ws'] = np.array([u[0] for u in client_updates])
+        model['f_norms'] = np.array([u[1] for u in client_updates])
+        converged = np.isclose(model['Ws'][0] - model['Ws'][1], 0)
+
+        self.debug.append({
+            'round': round,
+            'W0': model['Ws'][0],
+            'W1': model['Ws'][1],
+            'f_norm0': model['f_norms'][0],
+            'f_norm1': model['f_norms'][1],
+            'sum_beta0': model['sum_betas'][0],
+            'sum_beta1':model['sum_betas'][1]
+        })
+
+        if not converged:
+            model['sum_betas'] = np.array(self.opt_betas)
+
+            if not np.isclose(model['sum_betas'].sum(), 1.0):
+                print('Normalizing betas')
+                model['sum_betas'] /= model['sum_betas'].sum()
         
-        for b, x in zip(client_betas, client_xs):
-            if not np.isclose(b, 0):
-                xs.append(x)
-                betas.append(b)
+        assert np.isclose(model['sum_betas'].sum(), 1.0), f'betas sum is not 1, but {model["sum_betas"].sum()}.Sums {model["sum_betas"]}'
+        assert model['sum_betas'].min() >= 0.0, f'betas min is not 0, but {model["sum_betas"].min()}'
+        assert model['sum_betas'].max() <= 1.0, f'betas max is not 1, but {model["sum_betas"].max()}'
 
-        if len(xs) == 0:
-            LOGGER.warning(f'There is no client {index} update. No betas far from zero among all the {len(client_xs)} points')
-
-        round_classifiers['clients'][index] = clf
-        
-        return np.array(xs), np.array(betas)
-
-    def global_combine(self, global_model, client_updates):
-        # Concatenates server points and clients candidate points.
-        X = global_model['xs']
-        betas = global_model['betas']
-        for update in client_updates:
-            xs, bs = update
-            if xs.shape[0] == 0:
-                break
-            X = np.concatenate((X, xs))
-            betas = np.concatenate((betas, bs))
-
-        y = np.array([self.outlier_class_label if np.isclose(b, global_model['c']) else self.normal_class_label for b in betas])
-
-        search_params = {
-            'q': [global_model['q']],
-            'c': [global_model['c']]
-        }
-
-        if len(X) == 0:
-            LOGGER.warning("No datapoints after combining global model and client update. Is everything okay?")
-            return global_model, None
-
-        # TODO q should go from minimum proposed in 4.2 of svc paper to current +- 1
-        search_params['q'].extend(uniform(loc=0, scale=1).rvs(size=3))
-        search_params['c'].extend(uniform(loc=1/len(X), scale=1).rvs(size=3))
-        
-        # Performs model selection over this new dataset
-        test_fold = [0 if v < len(X) else 1 for v in range(len(X) * 2)]
-        clf = GridSearchCV(BSVClassifier(outlier_class_label=self.outlier_class_label, normal_class_label=self.normal_class_label), search_params, cv=PredefinedSplit(test_fold=test_fold), n_jobs=2, scoring=make_scorer(average_precision_score), refit=True, return_train_score=False, error_score='raise')
-        clf.fit(np.concatenate((X,X)), np.concatenate((y,y)))
-        
-        # Filter and keep only the support vectors
-        xs = []
-        betas = []
-        for b, x in zip(clf.best_estimator_.betas_, X):
-            if not np.isclose(b, 0):
-                xs.append(x)
-                betas.append(b)
-
-        return {
-            'q': clf.best_estimator_.q,
-            'c': clf.best_estimator_.c,
-            'betas': np.array(betas),
-            'xs': np.array(xs)
-        }, clf.best_estimator_
+        return model, converged
 
     def decision_function(self, X):
-        try:
-            return self.clf.decision_function(X)
-        except:
-            return np.random.choice([self.normal_class_label, self.outlier_class_label], len(X))
+        raise NotImplementedError('score_samples is not implemented for FederatedBSVClassifier')
 
     def score_samples(self, X):
-        return self.clf.score_samples(X)
+        raise NotImplementedError('score_samples is not implemented for FederatedBSVClassifier')
