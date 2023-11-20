@@ -131,7 +131,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         sum_betas = model.addConstr(sum(betas) == 1, name="sum_betas")
 
-        model.ModelSense = GRB.MAXIMIZE
+        model.ModelSense = GRB.MINIMIZE
 
         model.setParam('ObjScale', -0.5)
 
@@ -139,8 +139,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         model.setParam('NonConvex', 2)
 
-        model.setObjective(self_kernels @ betas - betas @
-                           kernels @ betas)
+        model.setObjective(betas @ kernels @ betas)
 
 
         model.optimize()
