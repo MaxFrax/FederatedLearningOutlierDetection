@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import PredefinedSplit, RandomizedSearchCV
 from sklearn.preprocessing import MinMaxScaler
+import os
 
 def svm_experiment(X: np.ndarray, y: np.array, classifier, distributions, njobs: int) -> (float, float):
     test_fold = [0 if v < len(X) else 1 for v in range(len(X) * 2)]
@@ -70,9 +71,16 @@ def get_dataset_from_path(path):
 
     return X, y
 
+
 def get_datasets():
     datasets = {}
-    for dataset in glob.glob('./datasets/*.csv'):
+    path = ''
+    if os.path.exists('./datasets'):
+        path = './datasets'
+    elif os.path.exists('../datasets'):
+        path = '../datasets'
+
+    for dataset in glob.glob(os.path.join(path, '*.csv')):
         datasets[os.path.splitext(os.path.basename(dataset))[0].replace('-unsupervised-ad','')] = dataset
 
     return datasets
