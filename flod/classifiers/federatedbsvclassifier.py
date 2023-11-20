@@ -121,7 +121,8 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         return self
 
     def predict(self, X):
-        raise NotImplementedError('score_samples is not implemented for FederatedBSVClassifier')
+        radius = np.average(self.radiuses0) + np.average(self.radiuses1)
+        return [self.outlier_class_label if self.fc0(x) + self.fc1(x) < radius else self.normal_class_label for x in X]
 
     def client_compute_update(self, index, global_model, client_data_x, client_data_y):
 
