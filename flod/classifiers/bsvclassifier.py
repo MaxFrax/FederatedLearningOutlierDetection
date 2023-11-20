@@ -59,7 +59,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         try:
             self.betas_, self.constant_term_ = BSVClassifier._solve_optimization_gurobi(
-                self.X_train_, self.y_train_, self.c, self.q)
+                self.X_train_, self.c, self.q)
         except gp.GurobiError:
             raise
         except:
@@ -81,8 +81,6 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         return self
 
     def predict(self, X):
-        # Input validation
-        # X = check_array(X)
 
         if self.betas_ is None or self.radiuses_ is None:
             LOGGER.error('You must call fit before predict!')
@@ -104,7 +102,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         return np.float64(np.exp(-1 * q * squared_norm))
 
     @staticmethod
-    def _solve_optimization_gurobi(xs, y, c, q):
+    def _solve_optimization_gurobi(xs, c, q):
 
         def gaussian_kernel(
             x1, x2): return BSVClassifier._gaussian_kernel(x1, x2, q)
@@ -157,8 +155,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         return best_betas, best_betas @ kernels @ best_betas
 
     def _compute_r(self, x) -> float:
-        v = self.constant_term_
-        v += BSVClassifier._gaussian_kernel(x, x, self.q)
+        v = 1 + self.constant_term_
         v += -2 * self.betas_ @ [self._gaussian_kernel(
             x_i, x, self.q) for x_i in self.X_train_]
         v = np.sqrt(v)
