@@ -40,7 +40,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
     def _compute_gamma(self, X, y, client_assignment):
         gamma = 0
 
-        clf = BSVClassifier(self.C, self.q, self.normal_class_label, self.outlier_class_label).fit(X, y)
+        clf = BSVClassifier(c=self.C, q=self.q, normal_class_label=self.normal_class_label, outlier_class_label=self.outlier_class_label).fit(X, y)
 
         # Determine which points belong to which client
         client_betas = [[] for _ in range(self.total_clients)]
@@ -88,8 +88,9 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             clients_y[assignment].append(y[i])
 
         model = self.init_server_model()
-        self.gamma, self.opt_betas, _, _ = self._compute_gamma(X, y, client_assignment)
+        self.gamma, self.opt_betas, self.opt_norms, _ = self._compute_gamma(X, y, client_assignment)
         model['sum_betas'] = np.array(self.opt_betas)
+        model['f_norms'] = np.array(self.opt_norms)
 
         r = 0
         converged = False
