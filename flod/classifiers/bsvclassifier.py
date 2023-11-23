@@ -125,20 +125,21 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         model.setParam('OutputFlag', 0)
         model.setParam('TimeLimit', 120)
 
+        model.setParam('TimeLimit', 120)
+        # Params suggested by auto tuner
+        model.setParam('Method', 0)
+        model.setParam('ScaleFlag', 0)
+        model.setParam('SimplexPricing', 3)
+        model.setParam('NumericFocus', 1)
+        model.setParam('Presolve', 0)
+
         betas = model.addMVar(len(xs), name="betas", ub=c, lb=0)
 
         sum_betas = model.addConstr(sum(betas) == 1, name="sum_betas")
 
         model.ModelSense = GRB.MINIMIZE
 
-        model.setParam('ObjScale', -0.5)
-
-        model.setParam('NumericFocus', 3)
-
-        model.setParam('NonConvex', 2)
-
         model.setObjective(betas @ kernels @ betas)
-
 
         model.optimize()
         #now = datetime.now()
