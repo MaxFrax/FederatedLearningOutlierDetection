@@ -1,11 +1,10 @@
-from math import nan
-from typing import Callable
 from flod.classifiers.bsvclassifier import BSVClassifier
 import numpy as np
 import logging
 import gurobipy as gp
 from sklearn.base import BaseEstimator, ClassifierMixin
 from collections import defaultdict
+from utils import error_code_to_string
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,9 +68,8 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             for j, b2 in client_betas[1]:
                 inner_product += b1 * b2 * BSVClassifier._gaussian_kernel(X[i], X[j], self.q)
 
-        # Compute gamma
+        # Compute ideal iper parameters
         gamma = (norm0 * norm1) - inner_product
-
         cos = inner_product / (norm0 * norm1)
 
         return cos, gamma, [sum_beta0, sum_beta1], [norm0, norm1], clf
@@ -91,6 +89,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         model = self.init_server_model()
         _, self.gamma, self.opt_betas, self.opt_norms, _ = self._compute_gamma(X, y, client_assignment)
 
+        # DEBUG uses fixed optimal values to optmize
         model['sum_betas'] = np.array(self.opt_betas)
         model['f_norms'] = np.array(self.opt_norms)
 
@@ -143,13 +142,15 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
                 kernels[j][i] = kern
 
         with gp.Model(f'Client_{index}') as opt:
+            print(f'\n\nClient_{index}')
             # Parameters configuration
-            opt.setParam('ObjScale', -0.5)
-            opt.setParam('NumericFocus', 3)
+            # Suggested by parameter tuning
+            opt.setParam('Method', 2)
+            opt.setParam('PrePasses', 1)
             opt.setParam('NonConvex', 2)
 
-            opt.setParam('OutputFlag', 0)
-            opt.setParam('TimeLimit', 240)
+            opt.setParam('OutputFlag', 1)
+            opt.setParam('TimeLimit', np.inf)
             
             opt.ModelSense = gp.GRB.MINIMIZE
 
@@ -161,12 +162,12 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             # Constraints
             sum_betas = opt.addConstr(betas.sum() == global_model['sum_betas'][index], name='sum_betas')
             opt.addConstr(inner_product == betas @ kernels @ betas)
-            opt.addGenConstrPow(root, inner_product, .5, "square_root")
+            opt.addGenConstrPow(root, inner_product, .5, "square_root", options="FuncPieces=-1 FuncPieceError=0.0001")
 
+            other_ix = (index+1)%2
+            other_client_norm = global_model['f_norms'][other_ix]
+            assert other_ix != index, f'Client {index} is trying to optimize with itself'
 
-            other_client_norm = global_model['f_norms'][(index+1)%2]
-
-            # DEBUG trying to add norm squared
             opt.setObjective(inner_product + 2 * other_client_norm * root -2*self.gamma + other_client_norm**2)
             opt.optimize()
 
@@ -174,7 +175,6 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
                 W = opt.objVal
                 norm = root.x
 
-                # DEBUG
                 if index == 0:
                     self.betas0 = [b for b in betas.x]
                     self.fc0 = lambda x: sum([b *  BSVClassifier._gaussian_kernel(x, xj, self.q) for xj, b in zip(client_data_x, self.betas0)])
@@ -185,24 +185,8 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
                     self.radiuses1 = [self.fc1(s) for s, b in zip(client_data_x, self.betas1) if b > 0 and b < self.C]
 
             except:
-                codes = {
-                    "1": "OPTIMAL",
-                    "2": "INFEASIBLE",
-                    "3": "INF_OR_UNBD",
-                    "4": "INFEASIBLE_OR_UNBOUNDED",
-                    "5": "UNBOUNDED",
-                    "6": "CUTOFF",
-                    "7": "ITERATION_LIMIT",
-                    "8": "NODE_LIMIT",
-                    "9": "TIME_LIMIT",
-                    "10": "SOLUTION_LIMIT",
-                    "11": "INTERRUPTED",
-                    "12": "NUMERIC",
-                    "13": "SUBOPTIMAL",
-                    "14": "INPROGRESS",
-                    "15": "USER_OBJ_LIMIT"
-                }
-                print(f'Client {index} failed to optimize. Status: {codes[str(opt.Status)]}')
+                error = error_code_to_string(opt.Status)
+                print(f'Client {index} failed to optimize. Status: {error}')
                 W = nan
                 norm = nan
                 raise
@@ -212,7 +196,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
     def global_combine(self, round, global_model, client_updates):
         model = global_model
         model['Ws'] = np.array([u[0] for u in client_updates])
-        model['f_norms'] = np.array([u[1] for u in client_updates])
+        # model['f_norms'] = np.array([u[1] for u in client_updates])
         converged = np.isclose(model['Ws'][0] - model['Ws'][1], 0)
 
         # Stores the parameters that produced the Ws
@@ -228,6 +212,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
 
         if not converged:
             model['sum_betas'] = np.array(self.opt_betas)
+            model['f_norms'] = np.array(self.opt_norms)
 
             if not np.isclose(model['sum_betas'].sum(), 1.0):
                 print('Normalizing betas')
