@@ -89,7 +89,8 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             clients_y[assignment].append(y[i])
 
         model = self.init_server_model()
-        self.gamma, self.opt_betas, self.opt_norms, _ = self._compute_gamma(X, y, client_assignment)
+        _, self.gamma, self.opt_betas, self.opt_norms, _ = self._compute_gamma(X, y, client_assignment)
+
         model['sum_betas'] = np.array(self.opt_betas)
         model['f_norms'] = np.array(self.opt_norms)
 
@@ -97,6 +98,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         converged = False
         while r < self.max_rounds and not converged:
             #LOGGER.debug(f'Round {r} of {self.max_rounds-1}. Ws: {model["Ws"]}')
+            print('\n\n-----------------------------------')
             print(f'Round {r} of {self.max_rounds-1}. Ws: {model["Ws"]}')
             r+=1
 
@@ -113,10 +115,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
                 updates.append(self.client_compute_update(c_ix, model, clients_x[c_ix], clients_y[c_ix]))
 
             model, converged = self.global_combine(r, model, updates)
-            round_callback(self.debug)
-
-        print("\nFit over\n")
-        print(model)
+            round_callback(self)
 
         # TODO train estimator for each client
 
@@ -216,14 +215,15 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         model['f_norms'] = np.array([u[1] for u in client_updates])
         converged = np.isclose(model['Ws'][0] - model['Ws'][1], 0)
 
+        # Stores the parameters that produced the Ws
         self.debug.append({
             'round': round,
             'W0': model['Ws'][0],
             'W1': model['Ws'][1],
-            'f_norm0': model['f_norms'][0],
-            'f_norm1': model['f_norms'][1],
-            'sum_beta0': model['sum_betas'][0],
-            'sum_beta1':model['sum_betas'][1]
+            'f_norm0': global_model['f_norms'][0],
+            'f_norm1': global_model['f_norms'][1],
+            'sum_beta0': global_model['sum_betas'][0],
+            'sum_beta1':global_model['sum_betas'][1]
         })
 
         if not converged:
