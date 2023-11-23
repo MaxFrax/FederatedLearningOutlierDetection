@@ -4,7 +4,7 @@ import logging
 import gurobipy as gp
 from sklearn.base import BaseEstimator, ClassifierMixin
 from collections import defaultdict
-from utils import error_code_to_string
+from flod.utils import error_code_to_string
 
 LOGGER = logging.getLogger(__name__)
 
