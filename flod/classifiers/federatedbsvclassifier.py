@@ -72,7 +72,9 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         # Compute gamma
         gamma = (norm0 * norm1) - inner_product
 
-        return gamma, [sum_beta0, sum_beta1], [norm0, norm1], clf
+        cos = inner_product / (norm0 * norm1)
+
+        return cos, gamma, [sum_beta0, sum_beta1], [norm0, norm1], clf
 
     def fit(self, X, y, client_assignment, round_callback):
         self.debug = []
