@@ -31,8 +31,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
 
     def init_server_model(self):
         return {
-            # 'sum_betas': np.full(self.total_clients, 1/self.total_clients),
-            'sum_betas': np.array([0.0, 1.0]),
+            'sum_betas': np.full(self.total_clients, 1/self.total_clients),
             'f_norms': np.zeros(self.total_clients),
             'Ws': np.zeros(self.total_clients)
     }
