@@ -228,4 +228,11 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         raise NotImplementedError('score_samples is not implemented for FederatedBSVClassifier')
 
     def score_samples(self, X):
-        raise NotImplementedError('score_samples is not implemented for FederatedBSVClassifier')
+            LOGGER.error('You must call fit before score_samples!')
+
+        radius = np.average(self.radiuses0) + np.average(self.radiuses1)
+
+        # Score samples needs to return the biggest value for the most normal sample
+        # and the lowest value to the most outlier sample
+        # Given that an anomaly is a sample with a prediction lower than the prediction of the support vecotors, here's the formula:
+        return np.array([self.fc0(x) + self.fc1(x) - radius for x in X])
