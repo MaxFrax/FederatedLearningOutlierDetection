@@ -13,6 +13,19 @@
             "justMyCode": true,
             "args": [
                 "flbsv_precomputed_gamma",
+                "pen-global",
+                "--njobs 1"
+            ]
+        },
+        {
+            "name": "Sklearn baseline",
+            "type": "python",
+            "request": "launch",
+            "program": "__main__.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "baseline_sklearn",
                 "pen-global"
             ]
         }
