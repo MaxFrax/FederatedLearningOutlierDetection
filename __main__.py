@@ -63,7 +63,7 @@ def baseline_svdd():
 def flbsv_precomputed_gamma():
     logger.info('Running flbsv experiment with precomputed gamma on %s', args.dataset)
 
-    classifier = FederatedBSVClassifier(normal_class_label=1, outlier_class_label=-1, max_rounds=1)
+    classifier = FederatedBSVClassifier(method='gamma', normal_class_label=1, outlier_class_label=-1, max_rounds=1)
     distributions = {'C':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
     
     auc_df, avg_df = compute_federated_experiment('flbsv_precomputed_gamma_auc.csv', 'flbsv_precomputed_gamma_avg.csv', classifier, distributions, args.dataset, args.njobs)
@@ -74,11 +74,9 @@ def flbsv_precomputed_gamma():
     print(avg_df)
 
 def flbsv_precomputed_cos():
-    raise NotImplementedError
-    # The following code is boilerplate from gamma, but this functionality is not yet implemented
     logger.info('Running flbsv experiment with precomputed cos on %s', args.dataset)
 
-    classifier = FederatedBSVClassifier(normal_class_label=1, outlier_class_label=-1, max_rounds=1)
+    classifier = FederatedBSVClassifier(method='cos', normal_class_label=1, outlier_class_label=-1, max_rounds=1)
     distributions = {'c':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
     
     auc_df, avg_df = compute_baseline('flbsv_precomputed_cos_auc.csv', 'flbsv_precomputed_cos_avg.csv', classifier, distributions, args.dataset, args.njobs)
