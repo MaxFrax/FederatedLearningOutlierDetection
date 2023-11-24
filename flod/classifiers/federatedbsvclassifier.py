@@ -75,19 +75,29 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         return cos, gamma, [sum_beta0, sum_beta1], [norm0, norm1], clf
 
     def fit(self, X, y, client_assignment, round_callback):
+        if sum(y) != len(y)*self.normal_class_label:
+            LOGGER.warning('FederatedBSVClassifier is not designed to train with outliers. All outliers will be ignored')
+        self.X_train_, self.y_train_, self.client_assignment_train = [], [], []
+
+        for i, y in enumerate(y):
+            if y == self.normal_class_label:
+                self.y_train_.append(y)
+                self.X_train_.append(X[i])
+                self.client_assignment_train.append(client_assignment[i])
+
         self.debug = []
 
         clients_x = defaultdict(list)
         clients_y = defaultdict(list)
 
         # Divides data among clients
-        for i, x in enumerate(X):
-            assignment = client_assignment[i]
+        for i, x in enumerate(self.X_train_):
+            assignment = self.client_assignment_train[i]
             clients_x[assignment].append(x)
-            clients_y[assignment].append(y[i])
+            clients_y[assignment].append(self.y_train_[i])
 
         model = self.init_server_model()
-        _, self.gamma, self.opt_betas, self.opt_norms, _ = self._compute_gamma(X, y, client_assignment)
+        _, self.gamma, self.opt_betas, self.opt_norms, _ = self._compute_gamma(self.X_train_, self.y_train_, self.client_assignment_train)
 
         # DEBUG uses fixed optimal values to optmize
         model['sum_betas'] = np.array(self.opt_betas)
@@ -96,9 +106,9 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         r = 0
         converged = False
         while r < self.max_rounds and not converged:
-            #LOGGER.debug(f'Round {r} of {self.max_rounds-1}. Ws: {model["Ws"]}')
-            print('\n\n-----------------------------------')
-            print(f'Round {r} of {self.max_rounds-1}. Ws: {model["Ws"]}')
+            LOGGER.info('\n-----------------------------------')
+            LOGGER.info(f'Round {r} of {self.max_rounds-1}. Ws: {model["Ws"]}')
+            
             r+=1
 
             # Selects clients to participate in this round
@@ -114,15 +124,13 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
                 updates.append(self.client_compute_update(c_ix, model, clients_x[c_ix], clients_y[c_ix]))
 
             model, converged = self.global_combine(r, model, updates)
-            round_callback(self)
+
+            if callable(round_callback):
+                round_callback(self)
 
         # TODO train estimator for each client
 
         return self
-
-    def predict(self, X):
-        radius = np.average(self.radiuses0) + np.average(self.radiuses1)
-        return [self.outlier_class_label if self.fc0(x) + self.fc1(x) < radius else self.normal_class_label for x in X]
 
     def client_compute_update(self, index, global_model, client_data_x, client_data_y):
 
@@ -142,15 +150,14 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
                 kernels[j][i] = kern
 
         with gp.Model(f'Client_{index}') as opt:
-            print(f'\n\nClient_{index}')
+            LOGGER.info(f'\nClient_{index}')
             # Parameters configuration
+            opt.setParam('OutputFlag', 0)
+            opt.setParam('TimeLimit', 600)
             # Suggested by parameter tuning
             opt.setParam('Method', 2)
             opt.setParam('PrePasses', 1)
             opt.setParam('NonConvex', 2)
-
-            opt.setParam('OutputFlag', 1)
-            opt.setParam('TimeLimit', np.inf)
             
             opt.ModelSense = gp.GRB.MINIMIZE
 
@@ -162,7 +169,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             # Constraints
             sum_betas = opt.addConstr(betas.sum() == global_model['sum_betas'][index], name='sum_betas')
             opt.addConstr(inner_product == betas @ kernels @ betas)
-            opt.addGenConstrPow(root, inner_product, .5, "square_root", options="FuncPieces=-1 FuncPieceError=0.0001")
+            opt.addGenConstrPow(root, inner_product, .5, "square_root", options="FuncPieces=320000")
 
             other_ix = (index+1)%2
             other_client_norm = global_model['f_norms'][other_ix]
@@ -175,6 +182,9 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
                 W = opt.objVal
                 norm = root.x
 
+                if not np.isclose(root.x**2,inner_product.x):
+                    LOGGER.error(f'Root and its square are not close. Improve gurobi model. Root^2: {root.x**2:.4f}, square: {inner_product.x:.4f}, error: {root.x**2 - inner_product.x}')
+
                 if index == 0:
                     self.betas0 = [b for b in betas.x]
                     self.fc0 = lambda x: sum([b *  BSVClassifier._gaussian_kernel(x, xj, self.q) for xj, b in zip(client_data_x, self.betas0)])
@@ -186,9 +196,9 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
 
             except:
                 error = error_code_to_string(opt.Status)
-                print(f'Client {index} failed to optimize. Status: {error}')
-                W = nan
-                norm = nan
+                LOGGER.error(f'Client {index} failed to optimize. Status: {error}')
+                W = np.nan
+                norm = np.nan
                 raise
 
         return W, norm
@@ -215,7 +225,6 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             model['f_norms'] = np.array(self.opt_norms)
 
             if not np.isclose(model['sum_betas'].sum(), 1.0):
-                print('Normalizing betas')
                 model['sum_betas'] /= model['sum_betas'].sum()
         
         assert np.isclose(model['sum_betas'].sum(), 1.0), f'betas sum is not 1, but {model["sum_betas"].sum()}.Sums {model["sum_betas"]}'
@@ -223,11 +232,16 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         assert model['sum_betas'].max() <= 1.0, f'betas max is not 1, but {model["sum_betas"].max()}'
 
         return model, converged
+    
+    def predict(self, X):
+        radius = np.average(self.radiuses0) + np.average(self.radiuses1)
+        return [self.outlier_class_label if self.fc0(x) + self.fc1(x) < radius else self.normal_class_label for x in X]
 
     def decision_function(self, X):
         raise NotImplementedError('score_samples is not implemented for FederatedBSVClassifier')
 
     def score_samples(self, X):
+        if self.betas_ is None:
             LOGGER.error('You must call fit before score_samples!')
 
         radius = np.average(self.radiuses0) + np.average(self.radiuses1)
