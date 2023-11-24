@@ -10,7 +10,7 @@ LOGGER = logging.getLogger(__name__)
 
 class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
 
-    def __init__(self, max_rounds: int = 10, normal_class_label:int=0, outlier_class_label:int=1, q:float=1, C:float=1):
+    def __init__(self, method, max_rounds: int = 10, normal_class_label:int=0, outlier_class_label:int=1, q:float=1, C:float=1):
         self.normal_class_label = normal_class_label
         self.outlier_class_label = outlier_class_label
         self.client_fraction = 1
@@ -18,6 +18,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         self.max_rounds = max_rounds
         self.q = q
         self.C = C
+        self.method = method
 
         self.classes_ = [self.outlier_class_label, self.normal_class_label]
 
@@ -97,7 +98,7 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             clients_y[assignment].append(self.y_train_[i])
 
         model = self.init_server_model()
-        _, self.gamma, self.opt_betas, self.opt_norms, _ = self._compute_gamma(self.X_train_, self.y_train_, self.client_assignment_train)
+        self.cos, self.gamma, self.opt_betas, self.opt_norms, _ = self._compute_gamma(self.X_train_, self.y_train_, self.client_assignment_train)
 
         # DEBUG uses fixed optimal values to optmize
         model['sum_betas'] = np.array(self.opt_betas)
@@ -169,13 +170,22 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             # Constraints
             sum_betas = opt.addConstr(betas.sum() == global_model['sum_betas'][index], name='sum_betas')
             opt.addConstr(inner_product == betas @ kernels @ betas)
-            opt.addGenConstrPow(root, inner_product, .5, "square_root", options="FuncPieces=320000")
+            opt.addGenConstrPow(root, inner_product, .5, "square_root", options="FuncPieces=640000")
 
             other_ix = (index+1)%2
             other_client_norm = global_model['f_norms'][other_ix]
             assert other_ix != index, f'Client {index} is trying to optimize with itself'
 
-            opt.setObjective(inner_product + 2 * other_client_norm * root -2*self.gamma + other_client_norm**2)
+            objective = None
+            
+            if self.method =='gamma':
+                objective = inner_product + 2 * other_client_norm * root -2*self.gamma + other_client_norm**2
+            elif self.method == 'cos': 
+                objective = inner_product + 2 * other_client_norm * root * self.cos + other_client_norm**2
+            else:
+                raise ValueError(f'Invalid method {self.method}. Only "gamma" and "cos" are valid methods')
+
+            opt.setObjective(objective)
             opt.optimize()
 
             try:
