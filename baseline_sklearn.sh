@@ -48,6 +48,6 @@ echo "Elapsed time: $(($end-$start)) s"
 
 echo $(date)
 start=$(date +%s)
-python __main__.py baseline_sklearn kd99
+python __main__.py baseline_sklearn kdd99
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
