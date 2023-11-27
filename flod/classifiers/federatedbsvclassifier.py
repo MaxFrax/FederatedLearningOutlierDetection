@@ -248,12 +248,9 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         return [self.outlier_class_label if self.fc0(x) + self.fc1(x) < radius else self.normal_class_label for x in X]
 
     def decision_function(self, X):
-        raise NotImplementedError('score_samples is not implemented for FederatedBSVClassifier')
+        return self.score_samples(X)
 
     def score_samples(self, X):
-        if self.betas_ is None:
-            LOGGER.error('You must call fit before score_samples!')
-
         radius = np.average(self.radiuses0) + np.average(self.radiuses1)
 
         # Score samples needs to return the biggest value for the most normal sample
