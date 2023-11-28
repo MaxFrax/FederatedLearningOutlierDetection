@@ -7,7 +7,12 @@ from sklearn.preprocessing import MinMaxScaler
 import os
 
 def log_results(experiment):
-    def logged_experiment(auc_res_path, avg_res_path, classifier, distributions, dataset, njobs, fit_params=None):
+    def logged_experiment(path_pattern, classifier, distributions, dataset, njobs, fit_params=None):
+
+        auc_res_path = path_pattern.format('auc')
+        avg_res_path = path_pattern.format('avg')
+        acc_res_path = path_pattern.format('accuracy')
+
         try:
             auc_df = pd.read_csv(auc_res_path, index_col=0)
         except FileNotFoundError:
@@ -18,7 +23,12 @@ def log_results(experiment):
         except FileNotFoundError:
             avg_df = pd.DataFrame()
 
-        res = experiment(auc_res_path, avg_res_path, classifier, distributions, dataset, njobs, fit_params=None)
+        try:
+            acc_df = pd.read_csv(acc_res_path, index_col=0)
+        except FileNotFoundError:
+            acc_df = pd.DataFrame()
+
+        res = experiment(classifier, distributions, dataset, njobs, fit_params=None)
 
         auc_df[dataset] = {
             classifier.__class__.__name__: f"{res['roc_auc']['mean']:.4f} ± {res['roc_auc']['std']:.4f}"
@@ -27,10 +37,15 @@ def log_results(experiment):
             classifier.__class__.__name__: f"{res['average_precision']['mean']:.4f} ± {res['average_precision']['std']:.4f}"
         }
 
+        acc_df[dataset] = {
+            classifier.__class__.__name__: f"{res['accuracy']['mean']:.4f} ± {res['accuracy']['std']:.4f}"
+        }
+
         auc_df.to_csv(auc_res_path)
         avg_df.to_csv(avg_res_path)
+        acc_df.to_csv(acc_res_path)
 
-        return auc_df, avg_df
+        return auc_df, avg_df, acc_df
     
     return logged_experiment
 
@@ -68,7 +83,7 @@ def svm_experiment(X: np.ndarray, y: np.array, classifier, distributions, njobs:
     test_fold = [0 if v < len(X) else 1 for v in range(len(X) * 2)]
 
     search = RandomizedSearchCV(classifier, distributions, cv=PredefinedSplit(
-        test_fold=test_fold), refit=False, n_iter=10, scoring=['roc_auc', 'average_precision'], n_jobs=njobs, error_score='raise', verbose=0)
+        test_fold=test_fold), refit=False, n_iter=10, scoring=['roc_auc', 'average_precision', 'accuracy'], n_jobs=njobs, error_score='raise', verbose=0)
 
     res = search.fit(np.concatenate((X, X)), np.concatenate((y, y)), **fit_params)
 
@@ -82,11 +97,15 @@ def svm_experiment(X: np.ndarray, y: np.array, classifier, distributions, njobs:
         'average_precision': {
             'mean': np.average(cv_results['mean_test_average_precision']),
             'std': np.std(cv_results['mean_test_average_precision'])
+        },
+        'accuracy': {
+            'mean': np.average(cv_results['mean_test_accuracy']),
+            'std': np.std(cv_results['mean_test_accuracy'])
         }
     }
 
 @log_results
-def compute_baseline(auc_res_path, avg_res_path, classifier, distributions, dataset, njobs,  fit_params={}):
+def compute_baseline(classifier, distributions, dataset, njobs,  fit_params={}):
     dinfo = get_datasets()[dataset]
 
     X,y = get_dataset_from_path(dinfo)
@@ -95,7 +114,7 @@ def compute_baseline(auc_res_path, avg_res_path, classifier, distributions, data
     return res
 
 @log_results
-def compute_federated_experiment(auc_res_path, avg_res_path, classifier, distributions, dataset, njobs, fit_params=None):
+def compute_federated_experiment(classifier, distributions, dataset, njobs, fit_params=None):
     dinfo = get_datasets()[dataset]
 
     X,y = get_dataset_from_path(dinfo)

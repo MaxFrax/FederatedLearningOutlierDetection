@@ -33,6 +33,15 @@ parser.add_argument('dataset', type=str, choices=get_datasets().keys(), help='Th
 # parse the arguments
 args = parser.parse_args()
 
+def print_results(results):
+    auc_df, avg_df, acc_df = results
+    print('AUC')
+    print(auc_df)
+    print('Average Precision')
+    print(avg_df)
+    print('Accuracy')
+    print(acc_df)
+
 def baseline_sklearn():
     logger.info('Running baseline sklearn experiment on %s', args.dataset)
 
@@ -40,12 +49,7 @@ def baseline_sklearn():
     distributions = dict(nu=uniform(loc=0.2, scale=0.8),
                          gamma=uniform(loc=0, scale=3))
     
-    auc_df, avg_df = compute_baseline('sklearn_auc.csv', 'sklearn_avg.csv', classifier, distributions, args.dataset, args.njobs)
-
-    print('AUC')
-    print(auc_df)
-    print('Average Precision')
-    print(avg_df)
+    print_results(compute_baseline('sklearn_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
 def baseline_svdd():
     logger.info('Running baseline svdd experiment on %s', args.dataset)
@@ -53,12 +57,7 @@ def baseline_svdd():
     classifier = BSVClassifier(normal_class_label=1, outlier_class_label=-1)
     distributions = {'c':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
     
-    auc_df, avg_df = compute_baseline('svdd_auc.csv', 'svdd_avg.csv', classifier, distributions, args.dataset, args.njobs)
-
-    print('AUC')
-    print(auc_df)
-    print('Average Precision')
-    print(avg_df)
+    print_results(compute_baseline('svdd_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
 def flbsv_precomputed_gamma():
     logger.info('Running flbsv experiment with precomputed gamma on %s', args.dataset)
@@ -66,12 +65,9 @@ def flbsv_precomputed_gamma():
     classifier = FederatedBSVClassifier(method='gamma', normal_class_label=1, outlier_class_label=-1, max_rounds=1)
     distributions = {'C':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
     
-    auc_df, avg_df = compute_federated_experiment('flbsv_precomputed_gamma_auc.csv', 'flbsv_precomputed_gamma_avg.csv', classifier, distributions, args.dataset, args.njobs)
+    print_results(compute_federated_experiment('flbsv_precomputed_gamma_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
-    print('AUC')
-    print(auc_df)
-    print('Average Precision')
-    print(avg_df)
+    
 
 def flbsv_precomputed_cos():
     logger.info('Running flbsv experiment with precomputed cos on %s', args.dataset)
@@ -79,12 +75,7 @@ def flbsv_precomputed_cos():
     classifier = FederatedBSVClassifier(method='cos', normal_class_label=1, outlier_class_label=-1, max_rounds=1)
     distributions = {'c':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
     
-    auc_df, avg_df = compute_baseline('flbsv_precomputed_cos_auc.csv', 'flbsv_precomputed_cos_avg.csv', classifier, distributions, args.dataset, args.njobs)
-
-    print('AUC')
-    print(auc_df)
-    print('Average Precision')
-    print(avg_df)
+    print_results(compute_federated_experiment('flbsv_precomputed_cos_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
 if args.loglevel:
     logger.setLevel(args.loglevel)
