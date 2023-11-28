@@ -1,18 +1,21 @@
 import logging
 from typing import Iterable
 from datetime import datetime
+from torch.distributions import constraints
 
 import gurobipy as gp
 import numpy as np
 from gurobipy import GRB
 from sklearn.base import BaseEstimator, ClassifierMixin
 
+import torch
+
 LOGGER = logging.getLogger(__name__)
 
 
 class BSVClassifier(ClassifierMixin, BaseEstimator):
 
-    def __init__(self, c: float = 1, q: float = 1, normal_class_label:int=0, outlier_class_label:int=1):
+    def __init__(self, c: float = 1, q: float = 1, normal_class_label:int=0, outlier_class_label:int=1, initial_lr=0.1, lr_decay=0.9, max_iter=1000):
         self.q = q
         self.c = c
         self.X_ = None
@@ -22,6 +25,9 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         self.radiuses_ = None
         self.normal_class_label = normal_class_label
         self.outlier_class_label = outlier_class_label
+        self.initial_lr = initial_lr
+        self.lr_decay = lr_decay
+        self.max_iter = max_iter
 
         self.classes_ = [self.outlier_class_label, self.normal_class_label]
 
@@ -58,7 +64,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         assert len(self.X_train_) > 0, f"There is no normal data for training among the provided {len(X)}"
 
         try:
-            self.betas_, self.constant_term_ = BSVClassifier._solve_optimization_gurobi(
+            self.betas_, self.constant_term_ = self._solve_optimization_pytorch(
                 self.X_train_, self.c, self.q)
         except gp.GurobiError:
             raise
@@ -107,7 +113,6 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         def gaussian_kernel(
             x1, x2): return BSVClassifier._gaussian_kernel(x1, x2, q)
 
-        self_kernels = np.array([gaussian_kernel(x_i, x_i) for x_i in xs])
         # TODO compress memory of symmetric matrix. Use a smart class or decopose the matrix
         kernels = np.empty((len(xs), len(xs)), dtype=np.float64)
 
@@ -155,11 +160,54 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
         return best_betas, best_betas @ kernels @ best_betas
 
+    def _solve_optimization_pytorch(self, xs, c, q):
+
+        def gaussian_kernel(
+            x1, x2): return BSVClassifier._gaussian_kernel(x1, x2, q)
+
+        kernels = torch.tensor([[gaussian_kernel(xi, xj) for xj in xs] for xi in xs], dtype=torch.float64)
+
+        def objective(betas):
+            first_prod = torch.inner(betas, kernels)
+            return torch.inner(first_prod, betas)
+
+        # Initialize x
+        betas = torch.rand((len(xs),), dtype=torch.float64) * c
+        betas = betas.detach().requires_grad_(True)
+
+        # Define the optimizer
+        optimizer = torch.optim.SGD([betas], lr=self.initial_lr)
+
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=self.lr_decay)
+        self.objectives = []
+
+        # Run the optimization
+        for i in range(self.max_iter):
+            optimizer.zero_grad()
+            output = objective(betas)
+            self.objectives.append(output.item())
+            output.backward()
+
+            with torch.no_grad():
+                betas.data /= betas.data.sum()
+                betas.data = torch.clamp(betas.data, 0, c)
+                betas.data /= betas.data.sum()
+
+            optimizer.step()
+            scheduler.step()  # Exponentially decay the learning rate
+
+            betas.data /= betas.data.sum()
+            betas.data = torch.clamp(betas.data, 0, c)
+            betas.data /= betas.data.sum()
+
+        return betas, objective(betas)
+
+    
     def _compute_r(self, x) -> float:
-        v = 1 + self.constant_term_
-        v += -2 * self.betas_ @ [self._gaussian_kernel(
-            x_i, x, self.q) for x_i in self.X_train_]
-        v = np.sqrt(v)
+        self_kernels = torch.tensor([self._gaussian_kernel(x_i, x, self.q) for x_i in self.X_train_])
+        v = 1.0 + self.constant_term_
+        v += -2.0 * torch.inner(self.betas_ , self_kernels)
+        v = torch.math.sqrt(v)
         return v
 
     def _best_radius(self) -> float:
@@ -167,10 +215,10 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         if len(self.X_train_) == 1:
             return 0
 
-        sv = [x for b, x in zip(self.betas_, self.X_train_) if not np.isclose(b, self.c) and not np.isclose(b, 0)]
+        sv = [x for b, x in zip(self.betas_, self.X_train_) if not torch.isclose(b, torch.tensor(self.c, dtype=torch.float64)) and not torch.isclose(b, torch.tensor(0.0, dtype=torch.float64))]
         assert len(sv) > 0, f'Cannot compute best radius. Missing support vectors among {len(self.X_train_)} datapoints. Maybe something went wrong during training?'
-        return np.average([self._compute_r(x) for x in sv])
+        return torch.mean(torch.tensor([self._compute_r(x) for x in sv], dtype=torch.float64))
 
     def decision_function(self, X):
-        #Like sklearn OneClassSVM "Signed distance is positive for an inlier and negative for an outlier.""
+        # Like sklearn OneClassSVM "Signed distance is positive for an inlier and negative for an outlier.""
         return self.score_samples(X)
