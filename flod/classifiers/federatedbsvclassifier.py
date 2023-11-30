@@ -198,10 +198,12 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
                 if index == 0:
                     self.betas0 = [b for b in betas.x]
                     self.fc0 = lambda x: sum([b *  BSVClassifier._gaussian_kernel(x, xj, self.q) for xj, b in zip(client_data_x, self.betas0)])
+                    self.fc0 = lambda x: sum([b *  BSVClassifier._gaussian_kernel(x, xj, self.q) for xj, b in zip(client_data_x, self.betas0) if b > 0 and b < self.C])
                     self.radiuses0 = [self.fc0(s) for s, b in zip(client_data_x, self.betas0) if b > 0 and b < self.C]
                 elif index == 1:
                     self.betas1 = [b for b in betas.x]
                     self.fc1 = lambda x: sum([b *  BSVClassifier._gaussian_kernel(x, xj, self.q) for xj, b in zip(client_data_x, self.betas1)])
+                    self.fc1 = lambda x: sum([b *  BSVClassifier._gaussian_kernel(x, xj, self.q) for xj, b in zip(client_data_x, self.betas1) if b > 0 and b < self.C])
                     self.radiuses1 = [self.fc1(s) for s, b in zip(client_data_x, self.betas1) if b > 0 and b < self.C]
 
             except:
