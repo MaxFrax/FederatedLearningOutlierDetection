@@ -154,11 +154,13 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
             LOGGER.info(f'\nClient_{index}')
             # Parameters configuration
             opt.setParam('OutputFlag', 0)
-            opt.setParam('TimeLimit', 600)
+            opt.setParam('TimeLimit', 60*4)
             # Suggested by parameter tuning
             opt.setParam('Method', 2)
             opt.setParam('PrePasses', 1)
             opt.setParam('NonConvex', 2)
+            # Suggested by gurobi webinar
+            opt.setParam('FuncNonLinear', 1)
             
             opt.ModelSense = gp.GRB.MINIMIZE
 
