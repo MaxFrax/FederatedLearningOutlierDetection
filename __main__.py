@@ -73,7 +73,7 @@ def flbsv_precomputed_cos():
     logger.info('Running flbsv experiment with precomputed cos on %s', args.dataset)
 
     classifier = FederatedBSVClassifier(method='cos', normal_class_label=1, outlier_class_label=-1, max_rounds=1)
-    distributions = {'c':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
+    distributions = {'C':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
     
     print_results(compute_federated_experiment('flbsv_precomputed_cos_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
