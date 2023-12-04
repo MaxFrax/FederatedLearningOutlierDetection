@@ -1,4 +1,6 @@
 import warnings
+
+from flod.classifiers.dp_flbsv import DPFLBSV
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import argparse
@@ -20,7 +22,7 @@ parser = argparse.ArgumentParser(
 # add arguments to the parser
 # TODO add support for federated learning biased experiments
 parser.add_argument('experiment', type=str, choices=[
-                    'baseline_sklearn', 'baseline_svdd', 'flbsv_precomputed_gamma', 'flbsv_precomputed_cos'], help='The experiment to run.')
+                    'baseline_sklearn', 'baseline_svdd', 'flbsv_precomputed_gamma', 'flbsv_precomputed_cos', 'dp_flbsv'], help='The experiment to run.')
 
 parser.add_argument('--njobs', type=int,
                     help='Number of parallel threads to use.', default=-1)
@@ -67,8 +69,6 @@ def flbsv_precomputed_gamma():
     
     print_results(compute_federated_experiment('flbsv_precomputed_gamma_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
-    
-
 def flbsv_precomputed_cos():
     logger.info('Running flbsv experiment with precomputed cos on %s', args.dataset)
 
@@ -76,6 +76,14 @@ def flbsv_precomputed_cos():
     distributions = {'C':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
     
     print_results(compute_federated_experiment('flbsv_precomputed_cos_{}.csv', classifier, distributions, args.dataset, args.njobs))
+
+def dp_flbsv():
+    logger.info('Running dp flbsv experiment on %s', args.dataset)
+
+    classifier = DPFLBSV(normal_class_label=1, outlier_class_label=-1, max_rounds=1)
+    distributions = {'C':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
+    
+    print_results(compute_federated_experiment('dp_flbsv_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
 if args.loglevel:
     logger.setLevel(args.loglevel)
@@ -88,3 +96,5 @@ elif args.experiment == 'flbsv_precomputed_gamma':
     flbsv_precomputed_gamma()
 elif args.experiment == 'flbsv_precomputed_cos':
     flbsv_precomputed_cos()
+elif args.experiment == 'dp_flbsv':
+    dp_flbsv()
