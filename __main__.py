@@ -22,7 +22,7 @@ parser = argparse.ArgumentParser(
 # add arguments to the parser
 # TODO add support for federated learning biased experiments
 parser.add_argument('experiment', type=str, choices=[
-                    'baseline_sklearn', 'baseline_svdd', 'flbsv_precomputed_gamma', 'flbsv_precomputed_cos', 'dp_flbsv'], help='The experiment to run.')
+                    'baseline_sklearn', 'baseline_svdd', 'flbsv_precomputed_gamma', 'flbsv_precomputed_cos', 'dp_flbsv', 'db_flbsv_noisy'], help='The experiment to run.')
 
 parser.add_argument('--njobs', type=int,
                     help='Number of parallel threads to use.', default=-1)
@@ -85,6 +85,14 @@ def dp_flbsv():
     
     print_results(compute_federated_experiment('dp_flbsv_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
+def dp_flbsv_noisy():
+    logger.info('Running dp flbsv noisy experiment on %s', args.dataset)
+
+    classifier = DPFLBSV(1e-500, .07, normal_class_label=1, outlier_class_label=-1, max_rounds=1)
+    distributions = {'C':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
+    
+    print_results(compute_federated_experiment('dp_flbsv_noisy_{}.csv', classifier, distributions, args.dataset, args.njobs))
+
 if args.loglevel:
     logger.setLevel(args.loglevel)
 
@@ -98,3 +106,5 @@ elif args.experiment == 'flbsv_precomputed_cos':
     flbsv_precomputed_cos()
 elif args.experiment == 'dp_flbsv':
     dp_flbsv()
+elif args.experiment == 'db_flbsv_noisy':
+    dp_flbsv_noisy()

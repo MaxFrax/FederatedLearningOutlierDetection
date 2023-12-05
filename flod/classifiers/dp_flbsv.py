@@ -4,13 +4,12 @@ import logging
 import gurobipy as gp
 from sklearn.base import BaseEstimator, ClassifierMixin
 from collections import defaultdict
-from flod.utils import error_code_to_string
 
 LOGGER = logging.getLogger(__name__)
 
 class DPFLBSV(ClassifierMixin, BaseEstimator):
 
-    def __init__(self, max_rounds: int = 1, normal_class_label:int=0, outlier_class_label:int=1, q:float=1, C:float=1):
+    def __init__(self, noise:float, tol:float, max_rounds: int = 1, normal_class_label:int=0, outlier_class_label:int=1, q:float=1, C:float=1):
         self.normal_class_label = normal_class_label
         self.outlier_class_label = outlier_class_label
         self.client_fraction = 1
@@ -18,6 +17,8 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
         self.max_rounds = max_rounds
         self.q = q
         self.C = C
+        self.noise = noise
+        self.tol = tol
 
         self.classes_ = [self.outlier_class_label, self.normal_class_label]
 
@@ -59,7 +60,7 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
         model = self.init_server_model(X.shape[1])
         
         for r in range(self.max_rounds):
-
+            LOGGER.info(f'Round {r}')
             # Selects clients to participate in this round
             # Its a feature for the future. As of today clients are always 0 and 1 at each round.
             selected_clients_count = max(1, self.total_clients * self.client_fraction)
@@ -70,6 +71,7 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
             updates = []
 
             for c_ix in clients_ix:
+                LOGGER.info(f'Client {c_ix} update')
                 updates.append(self.client_compute_update(c_ix, model, clients_x[c_ix], clients_y[c_ix]))
 
             model = self.global_combine(r, model, updates)
@@ -105,6 +107,26 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
         for b, x in zip(clf.betas_, clf.X_train_):
             if not np.isclose(b, self.C) and not np.isclose(b, 0):
                 support_vectors.append(x)
+
+        if self.noise > 0:
+            for i in range(len(support_vectors)):
+                attempts = 100
+                failed = True
+
+                n = np.random.normal(support_vectors[i], self.noise, support_vectors[i].shape)
+                xn = support_vectors[i] + n
+
+                for attempt in range(attempts):
+                    if np.isclose(clf._compute_r(xn), clf._best_radius(), atol=self.tol):
+                        support_vectors[i] = xn
+                        failed = False
+                        break
+                    n = np.random.normal(support_vectors[i], self.noise, support_vectors[i].shape)
+                    xn = support_vectors[i] + n
+
+                if failed:
+                    print(f'error {clf._compute_r(xn) - clf._best_radius()}')
+                    LOGGER.error(f'Failed to find a valid noise for support vector {i} after {attempts} attempts. The radius diff is {clf._compute_r(xn) - clf._best_radius()}')
 
         return support_vectors
 
