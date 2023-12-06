@@ -110,25 +110,18 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
 
         if self.noise > 0:
             for i in range(len(support_vectors)):
-                attempts = 100
-                failed = True
-
-                n = np.random.normal(0, self.noise, support_vectors[i].shape)
-                xn = support_vectors[i] + n
-
-                for attempt in range(attempts):
-                    if np.isclose(clf._compute_r(xn), clf._best_radius(), atol=self.tol):
-                        support_vectors[i] = xn
-                        failed = False
-                        break
-                    n = np.random.normal(support_vectors[i], self.noise, support_vectors[i].shape)
-                    xn = support_vectors[i] + n
-
-                if failed:
-                    print(f'error {clf._compute_r(xn) - clf._best_radius()}')
-                    LOGGER.error(f'Failed to find a valid noise for support vector {i} after {attempts} attempts. The radius diff is {clf._compute_r(xn) - clf._best_radius()}')
+                new_p = self.anonimize_point(support_vectors[i], clf)
+                support_vectors[i]  = new_p
 
         return support_vectors
+    
+    def anonimize_point(self, point, clf):
+        candidate = point + np.random.normal(0, self.noise, point.shape)
+
+        while abs(clf._compute_r(point) - clf._compute_r(candidate)) > self.tol:
+            candidate -= (candidate - point) * 0.1
+
+        return candidate
 
     def global_combine(self, round, global_model, client_updates):
         model = global_model.copy()
