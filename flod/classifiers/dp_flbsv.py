@@ -113,7 +113,7 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
                 attempts = 100
                 failed = True
 
-                n = np.random.normal(support_vectors[i], self.noise, support_vectors[i].shape)
+                n = np.random.normal(0, self.noise, support_vectors[i].shape)
                 xn = support_vectors[i] + n
 
                 for attempt in range(attempts):
