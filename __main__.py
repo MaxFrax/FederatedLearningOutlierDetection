@@ -11,6 +11,7 @@ from scipy.stats import uniform
 from flod.classifiers.bsvclassifier import BSVClassifier
 from flod.classifiers.federatedbsvclassifier import FederatedBSVClassifier
 from experiments.experiments import compute_baseline, get_datasets, compute_federated_experiment
+from flod.classifiers.ensemble_flbsv import EnsembleFLBSV
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stdout))
@@ -22,7 +23,7 @@ parser = argparse.ArgumentParser(
 # add arguments to the parser
 # TODO add support for federated learning biased experiments
 parser.add_argument('experiment', type=str, choices=[
-                    'baseline_sklearn', 'baseline_svdd', 'flbsv_precomputed_gamma', 'flbsv_precomputed_cos', 'dp_flbsv', 'db_flbsv_noisy'], help='The experiment to run.')
+                    'baseline_sklearn', 'baseline_svdd', 'flbsv_precomputed_gamma', 'flbsv_precomputed_cos', 'dp_flbsv', 'dp_flbsv_noisy', 'ensemble_flbsv'], help='The experiment to run.')
 
 parser.add_argument('--njobs', type=int,
                     help='Number of parallel threads to use.', default=-1)
@@ -80,7 +81,7 @@ def flbsv_precomputed_cos():
 def dp_flbsv():
     logger.info('Running dp flbsv experiment on %s', args.dataset)
 
-    classifier = DPFLBSV(normal_class_label=1, outlier_class_label=-1, max_rounds=1)
+    classifier = DPFLBSV(-1, -1, normal_class_label=1, outlier_class_label=-1, max_rounds=1)
     distributions = {'C':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
     
     print_results(compute_federated_experiment('dp_flbsv_{}.csv', classifier, distributions, args.dataset, args.njobs))
@@ -88,10 +89,18 @@ def dp_flbsv():
 def dp_flbsv_noisy():
     logger.info('Running dp flbsv noisy experiment on %s', args.dataset)
 
-    classifier = DPFLBSV(1e-500, .07, normal_class_label=1, outlier_class_label=-1, max_rounds=1)
+    classifier = DPFLBSV(1, .001, normal_class_label=1, outlier_class_label=-1, max_rounds=1)
     distributions = {'C':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
     
     print_results(compute_federated_experiment('dp_flbsv_noisy_{}.csv', classifier, distributions, args.dataset, args.njobs))
+
+def ensemble_flbsv():
+    logger.info('Running ensemble flbsv experiment on %s', args.dataset)
+
+    classifier = EnsembleFLBSV(normal_class_label=1, outlier_class_label=-1)
+    distributions = {'C':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
+    
+    print_results(compute_federated_experiment('ensemble_flbsv_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
 if args.loglevel:
     logger.setLevel(args.loglevel)
@@ -106,5 +115,7 @@ elif args.experiment == 'flbsv_precomputed_cos':
     flbsv_precomputed_cos()
 elif args.experiment == 'dp_flbsv':
     dp_flbsv()
-elif args.experiment == 'db_flbsv_noisy':
+elif args.experiment == 'dp_flbsv_noisy':
     dp_flbsv_noisy()
+elif args.experiment == 'ensemble_flbsv':
+    ensemble_flbsv()
