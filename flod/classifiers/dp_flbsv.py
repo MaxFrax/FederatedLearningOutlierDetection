@@ -121,6 +121,9 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
         while abs(clf._compute_r(point) - clf._compute_r(candidate)) > self.tol:
             candidate -= (candidate - point) * 0.1
 
+        if np.isclose(np.linalg.norm(candidate - point), 0.0):
+            LOGGER.warning('Anonymization failed')
+
         return candidate
 
     def global_combine(self, round, global_model, client_updates):
