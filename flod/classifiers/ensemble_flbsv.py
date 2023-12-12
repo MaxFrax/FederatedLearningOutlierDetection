@@ -1,21 +1,22 @@
 from flod.classifiers.bsvclassifier import BSVClassifier
 import numpy as np
 import logging
-import gurobipy as gp
 from sklearn.base import BaseEstimator, ClassifierMixin
 from collections import defaultdict
+from collections import Counter
 
 LOGGER = logging.getLogger(__name__)
 
 class EnsembleFLBSV(ClassifierMixin, BaseEstimator):
 
-    def __init__(self, normal_class_label:int=0, outlier_class_label:int=1, q:float=1, C:float=1):
+    def __init__(self, privacy=False, normal_class_label:int=0, outlier_class_label:int=1, q:float=1, C:float=1):
         self.normal_class_label = normal_class_label
         self.outlier_class_label = outlier_class_label
         self.client_fraction = 1
         self.total_clients = 2
         self.q = q
         self.C = C
+        self.privacy = privacy
 
         self.classes_ = [self.outlier_class_label, self.normal_class_label]
 
@@ -88,16 +89,62 @@ class EnsembleFLBSV(ClassifierMixin, BaseEstimator):
         if len(train_x) == 0:
             LOGGER.error(f'Client {index} does not have any normal data to train the model')
             return None
+        
+        train_x = np.array(train_x)
 
         clf = BSVClassifier(q=self.q, c=self.C, normal_class_label=self.normal_class_label, outlier_class_label=self.outlier_class_label)
         clf.fit(train_x, train_y)
 
+        if self.privacy:
+            attempts = 0
+
+            dataset, count_normal = self.generate_synthetic_dataset(clf, train_x)
+
+            while count_normal is None or count_normal < 3:
+                if attempts > 100:
+                    raise Exception(f'Could not generate a dataset with at least 3 normal points in 100 attempts. I found just {count_normal} normal points')
+                
+                if attempts % 25 == 0:
+                    LOGGER.debug(f'Client {index} attempt {attempts} with {count_normal} normal points at the time being')
+
+                # Keeps the normal points already generated
+                new_dataset, _ = self.generate_synthetic_dataset(clf, train_x)
+                for i, y in enumerate(clf.predict(dataset)):
+                    if y == self.outlier_class_label:
+                        dataset[i] = new_dataset[i]
+                
+                count_normal = Counter(clf.predict(dataset)).get(self.normal_class_label)
+                attempts += 1
+
+            derived = BSVClassifier(q=self.q, c=self.C, normal_class_label=self.normal_class_label, outlier_class_label=self.outlier_class_label)
+            derived.fit(dataset, clf.predict(dataset))
+
+            LOGGER.debug(f'Derived had {len(derived.X_train_)} training points. Original had {len(clf.X_train_)}')
+            LOGGER.debug(f'Derived had {len(derived.get_support_vectors())} support vectors. Original had {len(clf.get_support_vectors())}')
+
+            clf = derived
+
         return clf
+    
+    def generate_synthetic_dataset(self, clf, train_x):
+        avg_x = train_x.mean(axis=0)
+        std_x = train_x.std(axis=0)
+
+        # Generates a similar dataset to the one used for training
+        dataset = np.random.normal(loc=avg_x, scale=std_x, size=(train_x.shape[0] * 5, train_x.shape[1]))
+
+        # Ensures that the interesting area around support vectors is properly sampled
+        # .05 is the 5% of the domain if the dataset spans from 0 to 1
+        for sv in clf.get_support_vectors():
+            dataset = np.append(dataset, np.random.normal(loc=sv, scale=.05, size=(int(train_x.shape[0]), train_x.shape[1])), axis=0)
+
+        count_normal = Counter(clf.predict(dataset)).get(self.normal_class_label)
+
+        return dataset, count_normal
 
     def global_combine(self, round, global_model, client_updates):
-        model = global_model.copy()
-
-        model = client_updates
+        
+        model = list(client_updates)
 
         return model
     

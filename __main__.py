@@ -23,7 +23,7 @@ parser = argparse.ArgumentParser(
 # add arguments to the parser
 # TODO add support for federated learning biased experiments
 parser.add_argument('experiment', type=str, choices=[
-                    'baseline_sklearn', 'baseline_svdd', 'flbsv_precomputed_gamma', 'flbsv_precomputed_cos', 'dp_flbsv', 'dp_flbsv_noisy', 'ensemble_flbsv'], help='The experiment to run.')
+                    'baseline_sklearn', 'baseline_svdd', 'flbsv_precomputed_gamma', 'flbsv_precomputed_cos', 'dp_flbsv', 'dp_flbsv_noisy', 'ensemble_flbsv', 'ensemble_flbsv_noisy'], help='The experiment to run.')
 
 parser.add_argument('--njobs', type=int,
                     help='Number of parallel threads to use.', default=-1)
@@ -102,6 +102,14 @@ def ensemble_flbsv():
     
     print_results(compute_federated_experiment('ensemble_flbsv_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
+def ensemble_flbsv_noisy():
+    logger.info('Running ensemble flbsv noisy experiment on %s', args.dataset)
+
+    classifier = EnsembleFLBSV(normal_class_label=1, outlier_class_label=-1, privacy=True)
+    distributions = {'C':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
+    
+    print_results(compute_federated_experiment('ensemble_flbsv_noisy_{}.csv', classifier, distributions, args.dataset, args.njobs))
+
 if args.loglevel:
     logger.setLevel(args.loglevel)
 
@@ -119,3 +127,5 @@ elif args.experiment == 'dp_flbsv_noisy':
     dp_flbsv_noisy()
 elif args.experiment == 'ensemble_flbsv':
     ensemble_flbsv()
+elif args.experiment == 'ensemble_flbsv_noisy':
+    ensemble_flbsv_noisy()
