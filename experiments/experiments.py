@@ -10,18 +10,12 @@ def log_results(experiment):
     def logged_experiment(path_pattern, classifier, distributions, dataset, njobs, fit_params=None):
 
         auc_res_path = path_pattern.format('auc')
-        avg_res_path = path_pattern.format('avg')
         acc_res_path = path_pattern.format('accuracy')
 
         try:
             auc_df = pd.read_csv(auc_res_path, index_col=0)
         except FileNotFoundError:
             auc_df = pd.DataFrame()
-
-        try:
-            avg_df = pd.read_csv(avg_res_path, index_col=0)
-        except FileNotFoundError:
-            avg_df = pd.DataFrame()
 
         try:
             acc_df = pd.read_csv(acc_res_path, index_col=0)
@@ -33,19 +27,15 @@ def log_results(experiment):
         auc_df[dataset] = {
             classifier.__class__.__name__: f"{res['roc_auc']['mean']:.4f} ± {res['roc_auc']['std']:.4f}"
         }
-        avg_df[dataset] = {
-            classifier.__class__.__name__: f"{res['average_precision']['mean']:.4f} ± {res['average_precision']['std']:.4f}"
-        }
 
         acc_df[dataset] = {
             classifier.__class__.__name__: f"{res['accuracy']['mean']:.4f} ± {res['accuracy']['std']:.4f}"
         }
 
         auc_df.to_csv(auc_res_path)
-        avg_df.to_csv(avg_res_path)
         acc_df.to_csv(acc_res_path)
 
-        return auc_df, avg_df, acc_df
+        return auc_df, acc_df
     
     return logged_experiment
 

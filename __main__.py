@@ -37,11 +37,9 @@ parser.add_argument('dataset', type=str, choices=get_datasets().keys(), help='Th
 args = parser.parse_args()
 
 def print_results(results):
-    auc_df, avg_df, acc_df = results
+    auc_df, acc_df = results
     print('AUC')
     print(auc_df)
-    print('Average Precision')
-    print(avg_df)
     print('Accuracy')
     print(acc_df)
 
