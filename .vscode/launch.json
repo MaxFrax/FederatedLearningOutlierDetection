@@ -5,16 +5,17 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "FLBSV given gamma",
+            "name": "Noisy ensemble",
             "type": "python",
             "request": "launch",
             "program": "__main__.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
-                "flbsv_precomputed_gamma",
+                "ensemble_flbsv_noisy",
                 "pen-global",
-                "--njobs 1"
+                "--njobs",
+                "1"
             ]
         },
         {
