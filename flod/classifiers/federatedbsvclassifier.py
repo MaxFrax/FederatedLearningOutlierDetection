@@ -100,7 +100,6 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
         model = self.init_server_model()
         self.cos, self.gamma, self.opt_betas, self.opt_norms, _ = self._compute_gamma(self.X_train_, self.y_train_, self.client_assignment_train)
 
-        # DEBUG uses fixed optimal values to optmize
         model['sum_betas'] = np.array(self.opt_betas)
         model['f_norms'] = np.array(self.opt_norms)
 
@@ -128,8 +127,6 @@ class FederatedBSVClassifier(ClassifierMixin, BaseEstimator):
 
             if callable(round_callback):
                 round_callback(self)
-
-        # TODO train estimator for each client
 
         return self
 
