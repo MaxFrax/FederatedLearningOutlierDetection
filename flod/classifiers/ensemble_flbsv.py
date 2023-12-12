@@ -127,16 +127,16 @@ class EnsembleFLBSV(ClassifierMixin, BaseEstimator):
         return clf
     
     def generate_synthetic_dataset(self, clf, train_x):
-        avg_x = train_x.mean(axis=0)
-        std_x = train_x.std(axis=0)
+        avg_x = clf.get_inside_points().mean(axis=0)
+        std_x = clf.get_inside_points().std(axis=0)
 
         # Generates a similar dataset to the one used for training
-        dataset = np.random.normal(loc=avg_x, scale=std_x, size=(train_x.shape[0] * 5, train_x.shape[1]))
+        dataset = np.random.normal(loc=avg_x, scale=std_x, size=(clf.get_inside_points().shape[0], train_x.shape[1]))
 
         # Ensures that the interesting area around support vectors is properly sampled
-        # .05 is the 5% of the domain if the dataset spans from 0 to 1
+        # .01 is the 1% of the domain if the dataset spans from 0 to 1
         for sv in clf.get_support_vectors():
-            dataset = np.append(dataset, np.random.normal(loc=sv, scale=.05, size=(int(train_x.shape[0]), train_x.shape[1])), axis=0)
+            dataset = np.append(dataset, np.random.normal(loc=sv, scale=.01, size=(int(train_x.shape[0] * 1/len(clf.get_support_vectors())), train_x.shape[1])), axis=0)
 
         count_normal = Counter(clf.predict(dataset)).get(self.normal_class_label)
 
