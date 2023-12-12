@@ -172,4 +172,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         return self.score_samples(X)
     
     def get_support_vectors(self):
-        return [x for b, x in zip(self.betas_, self.X_train_) if not np.isclose(b, self.c) and not np.isclose(b, 0)]
+        return np.array([x for b, x in zip(self.betas_, self.X_train_) if not np.isclose(b, self.c) and not np.isclose(b, 0)])
+
+    def get_inside_points(self):
+        return np.array([x for b, x in zip(self.betas_, self.X_train_) if np.isclose(b, 0)])
