@@ -81,19 +81,12 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         return self
 
     def predict(self, X):
-
-        if self.betas_ is None or self.radiuses_ is None:
-            LOGGER.error('You must call fit before predict!')
-
         rs = [self._compute_r(x) for x in X]
         prediction = [self.outlier_class_label if ri > self.radius_ else self.normal_class_label for ri in rs]
 
         return np.array(prediction)
 
     def score_samples(self, X):
-        if self.betas_ is None:
-            LOGGER.error('You must call fit before score_samples!')
-
         return np.array([self.radius_ - self._compute_r(x) for x in X])
 
     @staticmethod
@@ -142,35 +135,41 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         model.setObjective(betas @ kernels @ betas)
 
         model.optimize()
-        #now = datetime.now()
         # To enable when debugging. If not debugging it just spams
         #model.write(f'{now}_BSVClassifier.mps')
 
         if model.status == GRB.INFEASIBLE:
+            now = datetime.now()
+            model.computeIIS()
+            model.write(f'{now}_BSVClassifier IIS.ilp')
             raise
-            # model.computeIIS()
-            # model.write(f'{now}_BSVClassifier IIS.ilp')
 
         best_betas = np.array([v.x for v in model.getVars()], dtype=np.float64)
 
         return best_betas, best_betas @ kernels @ best_betas
 
     def _compute_r(self, x) -> float:
-        v = 1 + self.constant_term_
-        v += -2 * self.betas_ @ [self._gaussian_kernel(
-            x_i, x, self.q) for x_i in self.X_train_]
-        v = np.sqrt(v)
-        return v
+        if self.constant_term_ is not None:
+            v = 1 + self.constant_term_
+            v += -2 * self.betas_ @ [self._gaussian_kernel(
+                x_i, x, self.q) for x_i in self.X_train_]
+            v = np.sqrt(v)
+            return v
+        else:
+            raise Exception('You must call fit before computing the radius')
 
     def _best_radius(self) -> float:
 
         if len(self.X_train_) == 1:
             return 0
 
-        sv = [x for b, x in zip(self.betas_, self.X_train_) if not np.isclose(b, self.c) and not np.isclose(b, 0)]
+        sv = self.get_support_vectors()
         assert len(sv) > 0, f'Cannot compute best radius. Missing support vectors among {len(self.X_train_)} datapoints. Maybe something went wrong during training?'
         return np.average([self._compute_r(x) for x in sv])
 
     def decision_function(self, X):
         #Like sklearn OneClassSVM "Signed distance is positive for an inlier and negative for an outlier.""
         return self.score_samples(X)
+    
+    def get_support_vectors(self):
+        return [x for b, x in zip(self.betas_, self.X_train_) if not np.isclose(b, self.c) and not np.isclose(b, 0)]
