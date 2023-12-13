@@ -46,65 +46,64 @@ def print_results(results):
 def baseline_sklearn():
     logger.info('Running baseline sklearn experiment on %s', args.dataset)
 
-    classifier = OneClassSVM(kernel='rbf')
-    distributions = dict(nu=uniform(loc=0.2, scale=0.8),
-                         gamma=uniform(loc=0, scale=3))
+    classifier = OneClassSVM(kernel='rbf', gamma='1')
+    distributions = dict(nu=uniform(loc=0.2, scale=0.8))
     
     print_results(compute_baseline('sklearn_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
 def baseline_svdd():
     logger.info('Running baseline svdd experiment on %s', args.dataset)
 
-    classifier = BSVClassifier(normal_class_label=1, outlier_class_label=-1)
-    distributions = {'c':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
+    classifier = BSVClassifier(normal_class_label=1, outlier_class_label=-1, q=1)
+    distributions = {'c':uniform(loc=0.2, scale=0.8)}
     
     print_results(compute_baseline('svdd_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
 def flbsv_precomputed_gamma():
     logger.info('Running flbsv experiment with precomputed gamma on %s', args.dataset)
 
-    classifier = FederatedBSVClassifier(method='gamma', normal_class_label=1, outlier_class_label=-1, max_rounds=1)
-    distributions = {'C':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
+    classifier = FederatedBSVClassifier(method='gamma', normal_class_label=1, outlier_class_label=-1, max_rounds=1, q=1)
+    distributions = {'C':uniform(loc=0.2, scale=0.8)}
     
     print_results(compute_federated_experiment('flbsv_precomputed_gamma_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
 def flbsv_precomputed_cos():
     logger.info('Running flbsv experiment with precomputed cos on %s', args.dataset)
 
-    classifier = FederatedBSVClassifier(method='cos', normal_class_label=1, outlier_class_label=-1, max_rounds=1)
-    distributions = {'C':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
+    classifier = FederatedBSVClassifier(method='cos', normal_class_label=1, outlier_class_label=-1, max_rounds=1, q=1)
+    distributions = {'C':uniform(loc=0.2, scale=0.8)}
     
     print_results(compute_federated_experiment('flbsv_precomputed_cos_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
 def dp_flbsv():
     logger.info('Running dp flbsv experiment on %s', args.dataset)
 
-    classifier = DPFLBSV(-1, -1, normal_class_label=1, outlier_class_label=-1, max_rounds=1)
-    distributions = {'C':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
+    classifier = DPFLBSV(-1, -1, normal_class_label=1, outlier_class_label=-1, max_rounds=1, q=1)
+    distributions = {'C':uniform(loc=0.2, scale=0.8)}
     
     print_results(compute_federated_experiment('dp_flbsv_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
 def dp_flbsv_noisy():
     logger.info('Running dp flbsv noisy experiment on %s', args.dataset)
 
-    classifier = DPFLBSV(1, .001, normal_class_label=1, outlier_class_label=-1, max_rounds=1)
-    distributions = {'C':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
+    classifier = DPFLBSV(1, .001, normal_class_label=1, outlier_class_label=-1, max_rounds=1, q=1)
+    distributions = {'C':uniform(loc=0.2, scale=0.8)}
     
     print_results(compute_federated_experiment('dp_flbsv_noisy_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
 def ensemble_flbsv():
     logger.info('Running ensemble flbsv experiment on %s', args.dataset)
 
-    classifier = EnsembleFLBSV(normal_class_label=1, outlier_class_label=-1)
-    distributions = {'C':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
+    classifier = EnsembleFLBSV(normal_class_label=1, outlier_class_label=-1, q=1)
+    distributions = {'C':uniform(loc=0.2, scale=0.8)}
     
     print_results(compute_federated_experiment('ensemble_flbsv_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
 def ensemble_flbsv_noisy():
     logger.info('Running ensemble flbsv noisy experiment on %s', args.dataset)
 
-    classifier = EnsembleFLBSV(normal_class_label=1, outlier_class_label=-1, privacy=True)
-    distributions = {'C':uniform(loc=0.2, scale=0.8),'q':uniform(loc=0, scale=3)}
+    classifier = EnsembleFLBSV(normal_class_label=1, outlier_class_label=-1, privacy=True, q=1)
+    distributions = {'C':uniform(loc=0.2, scale=0.8)}
     
     print_results(compute_federated_experiment('ensemble_flbsv_noisy_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
