@@ -62,7 +62,7 @@ def print_results(results):
 def baseline_sklearn():
     logger.info('Running baseline sklearn experiment on %s', args.dataset)
 
-    classifier = OneClassSVM(kernel='rbf', gamma='1')
+    classifier = OneClassSVM(kernel='rbf', gamma=1.0)
     distributions = dict(nu=uniform(loc=0.2, scale=0.8))
     print_results(compute_baseline('sklearn_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
