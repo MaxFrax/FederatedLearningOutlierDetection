@@ -35,7 +35,7 @@ def log_results(experiment):
         auc_df.to_csv(auc_res_path)
         acc_df.to_csv(acc_res_path)
 
-        return auc_df, acc_df
+        return auc_df, acc_df, auc_res_path, acc_res_path
     
     return logged_experiment
 

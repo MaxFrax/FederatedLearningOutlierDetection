@@ -329,3 +329,6 @@ $RECYCLE.BIN/
 cache/*
 *.joblib
 *.lic
+
+.neptune/
+*.csv

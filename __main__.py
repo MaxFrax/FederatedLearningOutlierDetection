@@ -12,9 +12,20 @@ from flod.classifiers.bsvclassifier import BSVClassifier
 from flod.classifiers.federatedbsvclassifier import FederatedBSVClassifier
 from experiments.experiments import compute_baseline, get_datasets, compute_federated_experiment
 from flod.classifiers.ensemble_flbsv import EnsembleFLBSV
+import os
+
+import neptune
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stdout))
+
+run = neptune.init_run(
+    project="maxfrax/FlodThesis",
+    api_token=os.environ.get("NEPTUNE_API_TOKEN"),
+)
 
 # create the parser object
 parser = argparse.ArgumentParser(
@@ -35,20 +46,24 @@ parser.add_argument('dataset', type=str, choices=get_datasets().keys(), help='Th
 
 # parse the arguments
 args = parser.parse_args()
+run["parameters"] = vars(args)
+run["sys/tags"].add([args.experiment, args.dataset])
 
 def print_results(results):
-    auc_df, acc_df = results
+    auc_df, acc_df, auc_path, acc_path = results
     print('AUC')
     print(auc_df)
     print('Accuracy')
     print(acc_df)
+
+    run["results/auc"].upload(auc_path)
+    run["results/accuracy"].upload(acc_path)
 
 def baseline_sklearn():
     logger.info('Running baseline sklearn experiment on %s', args.dataset)
 
     classifier = OneClassSVM(kernel='rbf', gamma='1')
     distributions = dict(nu=uniform(loc=0.2, scale=0.8))
-    
     print_results(compute_baseline('sklearn_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
 def baseline_svdd():
@@ -56,7 +71,6 @@ def baseline_svdd():
 
     classifier = BSVClassifier(normal_class_label=1, outlier_class_label=-1, q=1)
     distributions = {'c':uniform(loc=0.2, scale=0.8)}
-    
     print_results(compute_baseline('svdd_{}.csv', classifier, distributions, args.dataset, args.njobs))
 
 def flbsv_precomputed_gamma():
@@ -126,3 +140,5 @@ elif args.experiment == 'ensemble_flbsv':
     ensemble_flbsv()
 elif args.experiment == 'ensemble_flbsv_noisy':
     ensemble_flbsv_noisy()
+
+run.stop()
