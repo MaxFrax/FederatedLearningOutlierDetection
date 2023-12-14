@@ -120,7 +120,6 @@ def ensemble_flbsv_noisy():
 
 # parse the arguments
 args = parser.parse_args()
-print(vars(args))
 run["parameters"] = vars(args)
 run["sys/tags"].add([args.experiment, args.dataset])
 
