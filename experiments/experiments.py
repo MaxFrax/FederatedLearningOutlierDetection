@@ -12,7 +12,7 @@ import os
 LOGGER = logging.getLogger(__name__)
 
 def log_results(experiment):
-    def logged_experiment(path_pattern, classifier, distributions, dataset, njobs, fit_params=None):
+    def logged_experiment(path_pattern, classifier, distributions, dataset, njobs, iid, fit_params=None):
 
         auc_res_path = path_pattern.format('auc')
         acc_res_path = path_pattern.format('accuracy')
@@ -27,7 +27,7 @@ def log_results(experiment):
         except FileNotFoundError:
             acc_df = pd.DataFrame()
 
-        res = experiment(classifier, distributions, dataset, njobs, fit_params=None)
+        res = experiment(classifier, distributions, dataset, njobs, iid, fit_params=None)
 
         auc_df[dataset] = {
             classifier.__class__.__name__: f"{res['roc_auc']['mean']:.4f} ± {res['roc_auc']['std']:.4f}"
@@ -118,14 +118,14 @@ def compute_federated_experiment(classifier, distributions, dataset, njobs, iid,
 
     if iid:
         try:
-            assignment = np.load(f'iid_assignment_{clients}.npy')
+            assignment = np.load(f'iid_assignment_{clients}.npy', allow_pickle=True)
         except FileNotFoundError:
             LOGGER.warning(f'Could not find iid assignment file for {clients} clients. Generating a new one.')
             assignment = np.random.choice(list(range(clients)), size=len(X))
             assignment.dump(f'iid_assignment_{clients}.npy')
     else:
         try:
-            assignment = np.load(f'non_iid_assignment_{clients}.npy')
+            assignment = np.load(f'non_iid_assignment_{clients}.npy', allow_pickle=True)
         except FileNotFoundError:
             LOGGER.warning(f'Could not find non iid assignment file for {clients} clients. Generating a new one.')
             KMeans(n_clusters=clients).fit_predict(X).dump(f'non_iid_assignment_{clients}.npy')
