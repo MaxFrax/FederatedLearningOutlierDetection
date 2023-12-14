@@ -4,7 +4,12 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import PredefinedSplit, RandomizedSearchCV
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.cluster import KMeans
+import logging
+
 import os
+
+LOGGER = logging.getLogger(__name__)
 
 def log_results(experiment):
     def logged_experiment(path_pattern, classifier, distributions, dataset, njobs, fit_params=None):
@@ -78,6 +83,7 @@ def svm_experiment(X: np.ndarray, y: np.array, classifier, distributions, njobs:
     res = search.fit(np.concatenate((X, X)), np.concatenate((y, y)), **fit_params)
 
     cv_results = pd.DataFrame(res.cv_results_)
+    cv_results.to_csv(f'cv_results.csv')
 
     return {
         'roc_auc': {
@@ -104,13 +110,29 @@ def compute_baseline(classifier, distributions, dataset, njobs,  fit_params={}):
     return res
 
 @log_results
-def compute_federated_experiment(classifier, distributions, dataset, njobs, fit_params=None):
+def compute_federated_experiment(classifier, distributions, dataset, njobs, iid, fit_params=None):
     dinfo = get_datasets()[dataset]
+    clients = classifier.total_clients
 
     X,y = get_dataset_from_path(dinfo)
 
+    if iid:
+        try:
+            assignment = np.load(f'iid_assignment_{clients}.npy')
+        except FileNotFoundError:
+            LOGGER.warning(f'Could not find iid assignment file for {clients} clients. Generating a new one.')
+            assignment = np.random.choice(list(range(clients)), size=len(X))
+            assignment.dump(f'iid_assignment_{clients}.npy')
+    else:
+        try:
+            assignment = np.load(f'non_iid_assignment_{clients}.npy')
+        except FileNotFoundError:
+            LOGGER.warning(f'Could not find non iid assignment file for {clients} clients. Generating a new one.')
+            KMeans(n_clusters=clients).fit_predict(X).dump(f'non_iid_assignment_{clients}.npy')
+            assignment.dump(f'non_iid_assignment_{clients}.npy')
+
     fit_params = {
-        'client_assignment': np.random.choice([0,1], size=len(X)),
+        'client_assignment': assignment,
         'round_callback': None
     }
 

@@ -9,11 +9,11 @@ LOGGER = logging.getLogger(__name__)
 
 class EnsembleFLBSV(ClassifierMixin, BaseEstimator):
 
-    def __init__(self, privacy=False, normal_class_label:int=0, outlier_class_label:int=1, q:float=1, C:float=1):
+    def __init__(self, privacy=False, normal_class_label:int=0, outlier_class_label:int=1, q:float=1, C:float=1, total_clients:int=2, client_fraction:float=1):
         self.normal_class_label = normal_class_label
         self.outlier_class_label = outlier_class_label
-        self.client_fraction = 1
-        self.total_clients = 2
+        self.client_fraction = client_fraction
+        self.total_clients = total_clients
         self.q = q
         self.C = C
         self.privacy = privacy
@@ -49,6 +49,9 @@ class EnsembleFLBSV(ClassifierMixin, BaseEstimator):
             assignment = self.client_assignment_train[i]
             clients_x[assignment].append(x)
             clients_y[assignment].append(self.y_train_[i])
+
+        if len(np.unique(client_assignment)) != self.total_clients:
+            LOGGER.warning(f'It seems like some clients do not have any data. Expected {self.total_clients} clients, but found {len(np.unique(client_assignment))}')  
 
         self.model = self.init_server_model()
         r = 0

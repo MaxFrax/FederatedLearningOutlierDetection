@@ -9,11 +9,11 @@ LOGGER = logging.getLogger(__name__)
 
 class DPFLBSV(ClassifierMixin, BaseEstimator):
 
-    def __init__(self, noise:float, tol:float, max_rounds: int = 1, normal_class_label:int=0, outlier_class_label:int=1, q:float=1, C:float=1):
+    def __init__(self, noise:float, tol:float, max_rounds: int = 1, normal_class_label:int=0, outlier_class_label:int=1, q:float=1, C:float=1, total_clients:int=2, client_fraction:float=1):
         self.normal_class_label = normal_class_label
         self.outlier_class_label = outlier_class_label
-        self.client_fraction = 1
-        self.total_clients = 2
+        self.client_fraction = client_fraction
+        self.total_clients = total_clients
         self.max_rounds = max_rounds
         self.q = q
         self.C = C
@@ -46,7 +46,10 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
             if y == self.normal_class_label:
                 self.y_train_.append(y)
                 self.X_train_.append(X[i])
-                self.client_assignment_train.append(client_assignment[i])        
+                self.client_assignment_train.append(client_assignment[i])
+
+        if len(np.unique(client_assignment)) != self.total_clients:
+            LOGGER.warning(f'It seems like some clients do not have any data. Expected {self.total_clients} clients, but found {len(np.unique(client_assignment))}')  
 
         clients_x = defaultdict(list)
         clients_y = defaultdict(list)
