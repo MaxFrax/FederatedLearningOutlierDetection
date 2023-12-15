@@ -37,12 +37,14 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
             'xs': np.empty(shape=(0, dimensions_count))
     }
 
-    def fit(self, X, y, client_assignment, round_callback):
-        if sum(y) != len(y)*self.normal_class_label:
+    def fit(self, X, Y, client_assignment, round_callback):
+        if sum(Y) != len(Y)*self.normal_class_label:
             LOGGER.warning('FederatedBSVClassifier is not designed to train with outliers. All outliers will be ignored')
         self.X_train_, self.y_train_, self.client_assignment_train = [], [], []
 
-        for i, y in enumerate(y):
+        assert X.shape[0] == client_assignment.shape[0], 'X and client_assignment must have the same number of rows'
+
+        for i, y in enumerate(Y):
             if y == self.normal_class_label:
                 self.y_train_.append(y)
                 self.X_train_.append(X[i])

@@ -118,18 +118,18 @@ def compute_federated_experiment(classifier, distributions, dataset, njobs, iid,
 
     if iid:
         try:
-            assignment = np.load(f'iid_assignment_{clients}.npy', allow_pickle=True)
+            assignment = np.load(f'iid_assignment_{dataset}_{clients}.npy', allow_pickle=True)
         except FileNotFoundError:
             LOGGER.warning(f'Could not find iid assignment file for {clients} clients. Generating a new one.')
             assignment = np.random.choice(list(range(clients)), size=len(X))
-            assignment.dump(f'iid_assignment_{clients}.npy')
+            assignment.dump(f'iid_assignment_{dataset}_{clients}.npy')
     else:
         try:
-            assignment = np.load(f'non_iid_assignment_{clients}.npy', allow_pickle=True)
+            assignment = np.load(f'non_iid_assignment_{dataset}_{clients}.npy', allow_pickle=True)
         except FileNotFoundError:
             LOGGER.warning(f'Could not find non iid assignment file for {clients} clients. Generating a new one.')
-            KMeans(n_clusters=clients).fit_predict(X).dump(f'non_iid_assignment_{clients}.npy')
-            assignment.dump(f'non_iid_assignment_{clients}.npy')
+            KMeans(n_clusters=clients).fit_predict(X).dump(f'non_iid_assignment_{dataset}_{clients}.npy')
+            assignment.dump(f'non_iid_assignment_{dataset}_{clients}.npy')
 
     fit_params = {
         'client_assignment': assignment,
