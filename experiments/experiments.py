@@ -78,7 +78,7 @@ def svm_experiment(X: np.ndarray, y: np.array, classifier, distributions, njobs:
     test_fold = [0 if v < len(X) else 1 for v in range(len(X) * 2)]
 
     search = RandomizedSearchCV(classifier, distributions, cv=PredefinedSplit(
-        test_fold=test_fold), refit=False, n_iter=10, scoring=['roc_auc', 'average_precision', 'accuracy'], n_jobs=njobs, error_score='raise', verbose=0)
+        test_fold=test_fold), refit=False, n_iter=10, scoring=['roc_auc', 'average_precision', 'accuracy'], n_jobs=njobs, error_score='raise', verbose=10)
 
     res = search.fit(np.concatenate((X, X)), np.concatenate((y, y)), **fit_params)
 
@@ -101,7 +101,7 @@ def svm_experiment(X: np.ndarray, y: np.array, classifier, distributions, njobs:
     }
 
 @log_results
-def compute_baseline(classifier, distributions, dataset, njobs,  fit_params={}):
+def compute_baseline(classifier, distributions, dataset, njobs, iid, fit_params={}):
     dinfo = get_datasets()[dataset]
 
     X,y = get_dataset_from_path(dinfo)

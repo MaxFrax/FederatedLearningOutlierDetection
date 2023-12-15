@@ -71,7 +71,7 @@ def baseline_sklearn():
 
     classifier = OneClassSVM(kernel='rbf', gamma=1.0)
     distributions = dict(nu=uniform(loc=0.2, scale=0.8))
-    print_results(compute_baseline('sklearn_{}.csv', classifier, distributions, args.dataset, args.njobs))
+    print_results(compute_baseline('sklearn_{}.csv', classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
 
 def baseline_svdd():
     logger.info('Running baseline svdd experiment on %s', args.dataset)
@@ -84,7 +84,7 @@ def baseline_svdd():
 
     classifier = BSVClassifier(normal_class_label=1, outlier_class_label=-1, q=1)
     distributions = {'c':uniform(loc=0.2, scale=0.8)}
-    print_results(compute_baseline('svdd_{}.csv', classifier, distributions, args.dataset, args.njobs))
+    print_results(compute_baseline('svdd_{}.csv', classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
 
 def dp_flbsv():
     logger.info('Running dp flbsv experiment on %s', args.dataset)
@@ -142,5 +142,5 @@ elif args.experiment == 'ensemble_flbsv':
 elif args.experiment == 'ensemble_flbsv_noisy':
     ensemble_flbsv_noisy()
 
-run.upload('cv_results.csv')
+run["results/crossvalidation"].upload('cv_results.csv')
 run.stop()
