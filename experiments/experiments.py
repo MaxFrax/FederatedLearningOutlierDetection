@@ -107,6 +107,8 @@ def compute_baseline(classifier, distributions, dataset, njobs, iid, fit_params=
 
 @log_results
 def compute_federated_experiment(classifier, distributions, dataset, njobs, iid, fit_params=None):
+    np.random.seed(941703)
+
     dinfo = get_datasets()[dataset]
     clients = classifier.total_clients
 
