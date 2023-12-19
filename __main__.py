@@ -48,16 +48,20 @@ parser.add_argument('clients_amount', type=int, help='The amount of clients to u
 
 parser.add_argument('client_fraction', type=float, help='The fraction of clients to use in the federated learning experiment.')
 
-parser.add_argument('iid_dataset', type=bool, help='Whether to use an iid dataset or not.')
+parser.add_argument('iid_dataset', type=str, choices=['iid', 'biased'], help='Whether to use an iid dataset or not.')
 
 def print_results(results):
-    print(f'ROC AUC: {results["roc_auc"]["mean"]:.4f} ± {results["roc_auc"]["std"]:.4f}')
-    print(f'Accuracy: {results["accuracy"]["mean"]:.4f} ± {results["accuracy"]["std"]:.4f}')
+    pretty_auc = f'{results["roc_auc"]["mean"]:.4f} ± {results["roc_auc"]["std"]:.4f}'
+    pretty_acc = f'{results["accuracy"]["mean"]:.4f} ± {results["accuracy"]["std"]:.4f}'
+    print(f'ROC AUC: {pretty_auc}')
+    print(f'Accuracy: {pretty_acc}')
 
     run["results/avg_auc"]=results["roc_auc"]["mean"]
     run["results/avg_acc"]=results["accuracy"]["mean"]
     run["results/std_auc"]=results["roc_auc"]["std"]
     run["results/std_acc"]=results["accuracy"]["std"]
+    run["results/pretty_auc"]=pretty_auc
+    run["results/pretty_acc"]=pretty_acc
 
 def baseline_sklearn():
     logger.info('Running baseline sklearn experiment on %s', args.dataset)
@@ -65,7 +69,7 @@ def baseline_sklearn():
     if args.clients_amount != 1:
         raise ValueError('Baseline sklearn experiment does not support clients amount different than 1.')
     
-    if not args.iid_dataset:
+    if args.iid_dataset == 'biased':
         raise ValueError('Baseline sklearn experiment does not support non iid datasets.')
 
     classifier = OneClassSVM(kernel='rbf', gamma=1.0)
@@ -78,7 +82,7 @@ def baseline_svdd():
     if args.clients_amount != 1:
         raise ValueError('Baseline sklearn experiment does not support clients amount different than 1.')
     
-    if not args.iid_dataset:
+    if args.iid_dataset == 'biased':
         raise ValueError('Baseline sklearn experiment does not support non iid datasets.')
 
     classifier = BSVClassifier(normal_class_label=1, outlier_class_label=-1, q=1)
@@ -120,7 +124,7 @@ def ensemble_flbsv_noisy():
 # parse the arguments
 args = parser.parse_args()
 run["parameters"] = vars(args)
-run["sys/tags"].add([args.experiment, args.dataset])
+run["sys/tags"].add([args.experiment, args.dataset, args.iid_dataset])
 
 if args.loglevel:
     logger.setLevel(args.loglevel)
