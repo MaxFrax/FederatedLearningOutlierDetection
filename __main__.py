@@ -51,14 +51,13 @@ parser.add_argument('client_fraction', type=float, help='The fraction of clients
 parser.add_argument('iid_dataset', type=bool, help='Whether to use an iid dataset or not.')
 
 def print_results(results):
-    auc_df, acc_df, auc_path, acc_path = results
-    print('AUC')
-    print(auc_df)
-    print('Accuracy')
-    print(acc_df)
+    print(f'ROC AUC: {results["roc_auc"]["mean"]:.4f} ± {results["roc_auc"]["std"]:.4f}')
+    print(f'Accuracy: {results["accuracy"]["mean"]:.4f} ± {results["accuracy"]["std"]:.4f}')
 
-    run["results/auc"].upload(auc_path)
-    run["results/accuracy"].upload(acc_path)
+    run["results/avg_auc"]=results["roc_auc"]["mean"]
+    run["results/avg_acc"]=results["accuracy"]["mean"]
+    run["results/std_auc"]=results["roc_auc"]["std"]
+    run["results/std_acc"]=results["accuracy"]["std"]
 
 def baseline_sklearn():
     logger.info('Running baseline sklearn experiment on %s', args.dataset)
@@ -71,7 +70,7 @@ def baseline_sklearn():
 
     classifier = OneClassSVM(kernel='rbf', gamma=1.0)
     distributions = dict(nu=uniform(loc=0.2, scale=0.8))
-    print_results(compute_baseline('sklearn_{}.csv', classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
+    print_results(compute_baseline(classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
 
 def baseline_svdd():
     logger.info('Running baseline svdd experiment on %s', args.dataset)
@@ -84,7 +83,7 @@ def baseline_svdd():
 
     classifier = BSVClassifier(normal_class_label=1, outlier_class_label=-1, q=1)
     distributions = {'c':uniform(loc=0.2, scale=0.8)}
-    print_results(compute_baseline('svdd_{}.csv', classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
+    print_results(compute_baseline(classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
 
 def dp_flbsv():
     logger.info('Running dp flbsv experiment on %s', args.dataset)
@@ -92,7 +91,7 @@ def dp_flbsv():
     classifier = DPFLBSV(-1, -1, normal_class_label=1, outlier_class_label=-1, max_rounds=1, q=1, total_clients=args.clients_amount, client_fraction=args.client_fraction)
     distributions = {'C':uniform(loc=0.2, scale=0.8)}
     
-    print_results(compute_federated_experiment('dp_flbsv_{}.csv', classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
+    print_results(compute_federated_experiment(classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
 
 def dp_flbsv_noisy():
     logger.info('Running dp flbsv noisy experiment on %s', args.dataset)
@@ -100,7 +99,7 @@ def dp_flbsv_noisy():
     classifier = DPFLBSV(1, .001, normal_class_label=1, outlier_class_label=-1, max_rounds=1, q=1, total_clients=args.clients_amount, client_fraction=args.client_fraction)
     distributions = {'C':uniform(loc=0.2, scale=0.8)}
     
-    print_results(compute_federated_experiment('dp_flbsv_noisy_{}.csv', classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
+    print_results(compute_federated_experiment(classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
 
 def ensemble_flbsv():
     logger.info('Running ensemble flbsv experiment on %s', args.dataset)
@@ -108,7 +107,7 @@ def ensemble_flbsv():
     classifier = EnsembleFLBSV(normal_class_label=1, outlier_class_label=-1, q=1, total_clients=args.clients_amount, client_fraction=args.client_fraction)
     distributions = {'C':uniform(loc=0.2, scale=0.8)}
     
-    print_results(compute_federated_experiment('ensemble_flbsv_{}.csv', classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
+    print_results(compute_federated_experiment(classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
 
 def ensemble_flbsv_noisy():
     logger.info('Running ensemble flbsv noisy experiment on %s', args.dataset)
@@ -116,7 +115,7 @@ def ensemble_flbsv_noisy():
     classifier = EnsembleFLBSV(normal_class_label=1, outlier_class_label=-1, privacy=True, q=1, total_clients=args.clients_amount, client_fraction=args.client_fraction)
     distributions = {'C':uniform(loc=0.2, scale=0.8)}
     
-    print_results(compute_federated_experiment('ensemble_flbsv_noisy_{}.csv', classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
+    print_results(compute_federated_experiment(classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
 
 # parse the arguments
 args = parser.parse_args()

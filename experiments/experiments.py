@@ -11,39 +11,6 @@ import os
 
 LOGGER = logging.getLogger(__name__)
 
-def log_results(experiment):
-    def logged_experiment(path_pattern, classifier, distributions, dataset, njobs, iid, fit_params=None):
-
-        auc_res_path = path_pattern.format('auc')
-        acc_res_path = path_pattern.format('accuracy')
-
-        try:
-            auc_df = pd.read_csv(auc_res_path, index_col=0)
-        except FileNotFoundError:
-            auc_df = pd.DataFrame()
-
-        try:
-            acc_df = pd.read_csv(acc_res_path, index_col=0)
-        except FileNotFoundError:
-            acc_df = pd.DataFrame()
-
-        res = experiment(classifier, distributions, dataset, njobs, iid, fit_params=None)
-
-        auc_df[dataset] = {
-            classifier.__class__.__name__: f"{res['roc_auc']['mean']:.4f} ± {res['roc_auc']['std']:.4f}"
-        }
-
-        acc_df[dataset] = {
-            classifier.__class__.__name__: f"{res['accuracy']['mean']:.4f} ± {res['accuracy']['std']:.4f}"
-        }
-
-        auc_df.to_csv(auc_res_path)
-        acc_df.to_csv(acc_res_path)
-
-        return auc_df, acc_df, auc_res_path, acc_res_path
-    
-    return logged_experiment
-
 def get_dataset_from_path(path):
 
     data = pd.read_csv(path, header=0)
@@ -96,7 +63,6 @@ def svm_experiment(X: np.ndarray, y: np.array, classifier, distributions, njobs:
         }
     }
 
-@log_results
 def compute_baseline(classifier, distributions, dataset, njobs, iid, fit_params={}):
     dinfo = get_datasets()[dataset]
 
@@ -105,7 +71,6 @@ def compute_baseline(classifier, distributions, dataset, njobs, iid, fit_params=
 
     return res
 
-@log_results
 def compute_federated_experiment(classifier, distributions, dataset, njobs, iid, fit_params=None):
     np.random.seed(941703)
 
