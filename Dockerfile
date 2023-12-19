@@ -9,4 +9,4 @@ WORKDIR /FederatedLearningOutlierDetection
 
 COPY ./ ./
 
-CMD ["sh", "iid_dpflbsv_10.sh"]
+CMD ["sh", "iid_dpflbsv_5_noisy.sh"]
