@@ -38,7 +38,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         # Input validation
         assert len(X) > 0, f'You cannot fit with X of length 0'
         assert len(y) > 0, f'You cannot fit with y of length 0'
-        assert self.c >= 1 / len(X), f'c must be at least {1 / len(X)} to satisfy the constraint on the betas'
+        assert self.c >= 1 / len(X), f'c must be at least >= 1/{len(X)} = {1 / len(X)} to satisfy the constraint on the betas. Instead it is {self.c}'
 
         self.X_ = X
         self.y_ = y
@@ -142,7 +142,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
             now = datetime.now()
             model.computeIIS()
             model.write(f'{now}_BSVClassifier IIS.ilp')
-            raise
+            raise Exception('Infeasible model')
 
         best_betas = np.array([v.x for v in model.getVars()], dtype=np.float64)
 
