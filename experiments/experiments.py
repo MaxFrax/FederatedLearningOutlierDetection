@@ -91,7 +91,8 @@ def compute_federated_experiment(classifier, distributions, dataset, njobs, iid,
             assignment = np.load(f'non_iid_assignment_{dataset}_{clients}.npy', allow_pickle=True)
         except FileNotFoundError:
             LOGGER.warning(f'Could not find non iid assignment file for {clients} clients. Generating a new one.')
-            KMeans(n_clusters=clients).fit_predict(X).dump(f'non_iid_assignment_{dataset}_{clients}.npy')
+            assignment = KMeans(n_clusters=clients).fit_predict(X)
+            assignment.dump(f'non_iid_assignment_{dataset}_{clients}.npy')
 
     fit_params = {
         'client_assignment': assignment,
