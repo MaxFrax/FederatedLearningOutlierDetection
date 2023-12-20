@@ -30,6 +30,7 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
         self.__dict__ = state
 
     def init_server_model(self, dimensions_count):
+        self.dimensions_count = dimensions_count
         return {
             'q': 1,
             'c': 1,
@@ -88,7 +89,9 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
 
     def client_compute_update(self, index, global_model, client_data_x, client_data_y):
 
-        assert len(client_data_x) >= 0, f'Client {index} does not have any data to compute its update'
+        if len(client_data_x) <= 0:
+            LOGGER.warning(f'Client {index} does not have any data to compute its update')
+            return np.empty(shape=(0, self.dimensions_count))
 
         # Filter out anomalies from the training data
         train_x, train_y = [], []
@@ -101,12 +104,17 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
         # If there is no normal data, we can't train the model
         if len(train_x) == 0:
             LOGGER.error(f'Client {index} does not have any normal data to train the model')
-            return None
+            return np.empty(shape=(0, self.dimensions_count))
 
         combined_x = np.concatenate([global_model['xs'], np.array(train_x)])
         combined_y = np.concatenate([[self.normal_class_label] * len(global_model['xs']), np.array(train_y)])
         clf = BSVClassifier(q=self.q, c=self.C, normal_class_label=self.normal_class_label, outlier_class_label=self.outlier_class_label)
-        clf.fit(combined_x, combined_y)
+
+        try:
+            clf.fit(combined_x, combined_y)
+        except:
+            LOGGER.warning(f'Client {index} failed to train the model over {combined_x.shape[0]} samples')
+            return np.empty(shape=(0, self.dimensions_count))
 
         support_vectors = []
         for b, x in zip(clf.betas_, clf.X_train_):

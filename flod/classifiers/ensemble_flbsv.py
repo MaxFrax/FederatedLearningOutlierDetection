@@ -54,6 +54,7 @@ class EnsembleFLBSV(ClassifierMixin, BaseEstimator):
             LOGGER.warning(f'It seems like some clients do not have any data. Expected {self.total_clients} clients, but found {len(np.unique(client_assignment))}')  
 
         self.model = self.init_server_model()
+        self.dimensions_count = X.shape[1]
         r = 0
         
         # Selects clients to participate in this round
@@ -78,7 +79,9 @@ class EnsembleFLBSV(ClassifierMixin, BaseEstimator):
 
     def client_compute_update(self, index, global_model, client_data_x, client_data_y):
 
-        assert len(client_data_x) >= 0, f'Client {index} does not have any data to compute its update'
+        if len(client_data_x) <= 0:
+            LOGGER.warning(f'Client {index} does not have any data to compute its update')
+            return None
 
         # Filter out anomalies from the training data
         train_x, train_y = [], []
@@ -96,31 +99,24 @@ class EnsembleFLBSV(ClassifierMixin, BaseEstimator):
         train_x = np.array(train_x)
 
         clf = BSVClassifier(q=self.q, c=self.C, normal_class_label=self.normal_class_label, outlier_class_label=self.outlier_class_label)
-        clf.fit(train_x, train_y)
+        try:
+            clf.fit(train_x, train_y)
+        except:
+            LOGGER.warning(F'Client {index} failed to train the model over {len(train_x)} points')
+            return None
 
         if self.privacy:
-            attempts = 0
+            succeeded = False
+            multiplier = 2
+            while not succeeded and multiplier < 10:
+                dataset = self.generate_synthetic_dataset(clf, train_x, multiplier)
 
-            dataset, count_normal = self.generate_synthetic_dataset(clf, train_x)
-
-            while count_normal is None or count_normal < 3:
-                if attempts > 100:
-                    raise Exception(f'Could not generate a dataset with at least 3 normal points in 100 attempts. I found just {count_normal} normal points')
-                
-                if attempts % 25 == 0:
-                    LOGGER.debug(f'Client {index} attempt {attempts} with {count_normal} normal points at the time being')
-
-                # Keeps the normal points already generated
-                new_dataset, _ = self.generate_synthetic_dataset(clf, train_x)
-                for i, y in enumerate(clf.predict(dataset)):
-                    if y == self.outlier_class_label:
-                        dataset[i] = new_dataset[i]
-                
-                count_normal = Counter(clf.predict(dataset)).get(self.normal_class_label)
-                attempts += 1
-
-            derived = BSVClassifier(q=self.q, c=self.C, normal_class_label=self.normal_class_label, outlier_class_label=self.outlier_class_label)
-            derived.fit(dataset, clf.predict(dataset))
+                derived = BSVClassifier(q=self.q, c=self.C, normal_class_label=self.normal_class_label, outlier_class_label=self.outlier_class_label)
+                try:
+                    derived.fit(dataset, clf.predict(dataset))
+                    succeeded = True
+                except:
+                    multiplier +=1
 
             LOGGER.debug(f'Derived had {len(derived.X_train_)} training points. Original had {len(clf.X_train_)}')
             LOGGER.debug(f'Derived had {len(derived.get_support_vectors())} support vectors. Original had {len(clf.get_support_vectors())}')
@@ -129,26 +125,49 @@ class EnsembleFLBSV(ClassifierMixin, BaseEstimator):
 
         return clf
     
-    def generate_synthetic_dataset(self, clf, train_x):
-        avg_x = clf.get_inside_points().mean(axis=0)
-        std_x = clf.get_inside_points().std(axis=0)
+    def generate_synthetic_dataset(self, clf, train_x, multiplier):
+        attempts = 0
+        dataset, count_normal = self.sample_classifier(clf, train_x, multiplier)
 
-        # Generates a similar dataset to the one used for training
-        dataset = np.random.normal(loc=avg_x, scale=std_x, size=(clf.get_inside_points().shape[0], train_x.shape[1]))
+        while count_normal is None or count_normal < 3:
+            if attempts > 100:
+                raise Exception(f'Could not generate a dataset with at least 3 normal points in 100 attempts. I found just {count_normal} normal points')
+
+            # Keeps the normal points already generated
+            new_dataset, _ = self.sample_classifier(clf, train_x, multiplier)
+            for i, y in enumerate(clf.predict(dataset)):
+                if y == self.outlier_class_label:
+                    dataset[i] = new_dataset[i]
+            
+            count_normal = Counter(clf.predict(dataset)).get(self.normal_class_label)
+            attempts += 1
+
+        return dataset
+    
+    def sample_classifier(self, clf, train_x, multiplier = 2):
+        inside_points = clf.get_inside_points()
+        dataset = np.empty(shape=(0, train_x.shape[1]))
+
+        if inside_points.shape[0] > 0:
+            avg_x = inside_points.mean(axis=0)
+            std_x = inside_points.std(axis=0)
+
+            # Generates a similar dataset to the one used for training
+            dataset = np.random.normal(loc=avg_x, scale=std_x, size=(inside_points.shape[0], train_x.shape[1]))
+            # The goal is to have a synthetic dataset about twice the size of the original one.
+            multiplier -= 1
 
         # Ensures that the interesting area around support vectors is properly sampled
         # .01 is the 1% of the domain if the dataset spans from 0 to 1
         for sv in clf.get_support_vectors():
-            dataset = np.append(dataset, np.random.normal(loc=sv, scale=.01, size=(int(train_x.shape[0] * 1/len(clf.get_support_vectors())), train_x.shape[1])), axis=0)
+            dataset = np.append(dataset, np.random.normal(loc=sv, scale=.01, size=(int(train_x.shape[0] * multiplier/len(clf.get_support_vectors())), train_x.shape[1])), axis=0)
 
         count_normal = Counter(clf.predict(dataset)).get(self.normal_class_label)
 
         return dataset, count_normal
 
     def global_combine(self, round, global_model, client_updates):
-        
-        model = list(client_updates)
-
+        model = [update for update in client_updates if update is not None]
         return model
     
     def _predict_one(self, x):
