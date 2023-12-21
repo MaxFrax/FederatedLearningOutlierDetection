@@ -6,6 +6,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 import argparse
 import logging
 import sys
+from sklearn.dummy import DummyClassifier
 from sklearn.svm import OneClassSVM
 from scipy.stats import uniform
 from flod.classifiers.bsvclassifier import BSVClassifier
@@ -34,7 +35,7 @@ parser = argparse.ArgumentParser(
 # add arguments to the parser
 
 parser.add_argument('experiment', type=str, choices=[
-                    'baseline_sklearn', 'baseline_svdd', 'dp_flbsv', 'dp_flbsv_noisy', 'ensemble_flbsv', 'ensemble_flbsv_noisy'], help='The experiment to run.')
+                    'baseline_sklearn', 'baseline_svdd', 'dp_flbsv', 'dp_flbsv_noisy', 'ensemble_flbsv', 'ensemble_flbsv_noisy', 'most_frequent'], help='The experiment to run.')
 
 parser.add_argument('--njobs', type=int,
                     help='Number of parallel threads to use.', default=-1)
@@ -121,6 +122,14 @@ def ensemble_flbsv_noisy():
     
     print_results(compute_federated_experiment(classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
 
+def most_frequent():
+    logger.info('Running dummy most frequent experiment on %s', args.dataset)
+
+    classifier = DummyClassifier(strategy='most_frequent')
+    distributions = {}
+
+    print_results(compute_baseline(classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
+
 # parse the arguments
 args = parser.parse_args()
 run["parameters"] = vars(args)
@@ -144,6 +153,8 @@ elif args.experiment == 'ensemble_flbsv':
     ensemble_flbsv()
 elif args.experiment == 'ensemble_flbsv_noisy':
     ensemble_flbsv_noisy()
+elif args.experiment == 'most_frequent':
+    most_frequent()
 
 run["results/crossvalidation"].upload('cv_results.csv')
 run.stop()
