@@ -9,4 +9,4 @@ WORKDIR /FederatedLearningOutlierDetection
 
 COPY ./ ./
 
-CMD ["sh", "experiments_satellite.sh", "&&", "sh", "experiments_penlocal.sh", "&&", "sh", "experiments_annthyroid.sh"]
+CMD ["sh", "experiments_penlocal.sh"]
