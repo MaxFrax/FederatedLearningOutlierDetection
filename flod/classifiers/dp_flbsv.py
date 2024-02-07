@@ -63,7 +63,7 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
             clients_x[assignment].append(x)
             clients_y[assignment].append(self.y_train_[i])
 
-        model = self.init_server_model(X.shape[1])
+        self.model = self.init_server_model(X.shape[1])
         
         for r in range(self.max_rounds):
             LOGGER.info(f'Round {r}')
@@ -78,9 +78,9 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
 
             for c_ix in clients_ix:
                 LOGGER.info(f'Client {c_ix} update')
-                updates.append(self.client_compute_update(c_ix, model, clients_x[c_ix], clients_y[c_ix]))
+                updates.append(self.client_compute_update(c_ix, self.model, clients_x[c_ix], clients_y[c_ix]))
 
-            model = self.global_combine(r, model, updates)
+            self.model = self.global_combine(r, self.model, updates)
 
             if callable(round_callback):
                 round_callback(self)
@@ -142,11 +142,11 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
     def global_combine(self, round, global_model, client_updates):
         model = global_model.copy()
 
-        all_support_vectors = np.concatenate([global_model['xs'], *client_updates])
-        y = np.array([self.normal_class_label] * len(all_support_vectors))
+        self.all_support_vectors = np.concatenate([global_model['xs'], *client_updates])
+        y = np.array([self.normal_class_label] * len(self.all_support_vectors))
 
-        clf = BSVClassifier(c=self.C, q=self.q, normal_class_label=self.normal_class_label, outlier_class_label=self.outlier_class_label).fit(all_support_vectors, y)
-        clf.fit(all_support_vectors, y)
+        clf = BSVClassifier(c=self.C, q=self.q, normal_class_label=self.normal_class_label, outlier_class_label=self.outlier_class_label).fit(self.all_support_vectors, y)
+        clf.fit(self.all_support_vectors, y)
 
         support_vectors, betas = [], []
         for b, x in zip(clf.betas_, clf.X_train_):
