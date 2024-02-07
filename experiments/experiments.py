@@ -2,7 +2,7 @@ import glob
 import os
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import PredefinedSplit, RandomizedSearchCV
+from sklearn.model_selection import PredefinedSplit, RandomizedSearchCV, StratifiedKFold, cross_validate
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.cluster import KMeans
 import logging
@@ -41,7 +41,7 @@ def get_datasets():
 
     return datasets
 
-def svm_experiment(X: np.ndarray, y: np.array, classifier, distributions, njobs: int, fit_params = {}) -> (float, float):
+def unsupervised_experiment(X: np.ndarray, y: np.array, classifier, distributions, njobs: int, fit_params = {}) -> (float, float):
     test_fold = [0 if v < len(X) else 1 for v in range(len(X) * 2)]
 
     search = RandomizedSearchCV(classifier, distributions, cv=PredefinedSplit(
@@ -63,11 +63,33 @@ def svm_experiment(X: np.ndarray, y: np.array, classifier, distributions, njobs:
         }
     }
 
+def nested_crossval_experiment(X: np.ndarray, y: np.array, classifier, distributions, njobs: int, fit_params = {}) -> (float, float):
+    # Declare the inner and outer cross-validation strategies
+    inner_cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=941703)
+    outer_cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=941703)
+
+    # Inner cross-validation for parameter search
+    model = RandomizedSearchCV(classifier, distributions, cv=inner_cv, n_iter=10, scoring=['roc_auc', 'accuracy'], n_jobs=njobs, error_score='raise', verbose=0, refit='accuracy')
+
+    # Outer cross-validation to compute the testing score
+    test_score = cross_validate(model, X, y, cv=outer_cv, n_jobs=njobs, scoring=['roc_auc', 'accuracy'], params=fit_params)
+
+    return {
+        'roc_auc': {
+            'mean': np.average(test_score['test_roc_auc']),
+            'std': np.std(test_score['test_roc_auc'])
+        },
+        'accuracy': {
+            'mean': np.average(test_score['test_accuracy']),
+            'std': np.std(test_score['test_accuracy'])
+        }
+    }
+
 def compute_baseline(classifier, distributions, dataset, njobs, iid, fit_params={}):
     dinfo = get_datasets()[dataset]
 
     X,y = get_dataset_from_path(dinfo)
-    res = svm_experiment(X, y, classifier, distributions, njobs)
+    res = unsupervised_experiment(X, y, classifier, distributions, njobs)
 
     return res
 
@@ -99,6 +121,6 @@ def compute_federated_experiment(classifier, distributions, dataset, njobs, iid,
         'round_callback': None
     }
 
-    res = svm_experiment(X, y, classifier, distributions, njobs, fit_params)
+    res = unsupervised_experiment(X, y, classifier, distributions, njobs, fit_params)
 
     return res

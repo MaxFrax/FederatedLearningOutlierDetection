@@ -51,6 +51,8 @@ parser.add_argument('client_fraction', type=float, help='The fraction of clients
 
 parser.add_argument('iid_dataset', type=str, choices=['iid', 'biased'], help='Whether to use an iid dataset or not.')
 
+parser.add_argument('evaluation_technique', type=str, choices=['unsupervised', 'nested_crossval'], help='The evaluation technique to use.')
+
 def print_results(results):
     pretty_auc = f'{results["roc_auc"]["mean"]:.4f} ± {results["roc_auc"]["std"]:.4f}'
     pretty_acc = f'{results["accuracy"]["mean"]:.4f} ± {results["accuracy"]["std"]:.4f}'
@@ -75,7 +77,7 @@ def baseline_sklearn():
 
     classifier = OneClassSVM(kernel='rbf', gamma=1.0)
     distributions = dict(nu=uniform(loc=0.2, scale=0.8))
-    print_results(compute_baseline(classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
+    print_results(compute_baseline(classifier, distributions, args.dataset, args.njobs, args.iid_dataset, args.evaluation_technique))
 
 def baseline_svdd():
     logger.info('Running baseline svdd experiment on %s', args.dataset)
@@ -88,7 +90,7 @@ def baseline_svdd():
 
     classifier = BSVClassifier(normal_class_label=1, outlier_class_label=-1, q=1)
     distributions = {'c':uniform(loc=0.2, scale=0.8)}
-    print_results(compute_baseline(classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
+    print_results(compute_baseline(classifier, distributions, args.dataset, args.njobs, args.iid_dataset, args.evaluation_technique))
 
 def dp_flbsv():
     logger.info('Running dp flbsv experiment on %s', args.dataset)
@@ -96,7 +98,7 @@ def dp_flbsv():
     classifier = DPFLBSV(-1, -1, normal_class_label=1, outlier_class_label=-1, max_rounds=1, q=1, total_clients=args.clients_amount, client_fraction=args.client_fraction)
     distributions = {'C':uniform(loc=0.2, scale=0.8)}
     
-    print_results(compute_federated_experiment(classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
+    print_results(compute_federated_experiment(classifier, distributions, args.dataset, args.njobs, args.iid_dataset, args.evaluation_technique))
 
 def dp_flbsv_noisy():
     logger.info('Running dp flbsv noisy experiment on %s', args.dataset)
@@ -104,7 +106,7 @@ def dp_flbsv_noisy():
     classifier = DPFLBSV(1, .001, normal_class_label=1, outlier_class_label=-1, max_rounds=1, q=1, total_clients=args.clients_amount, client_fraction=args.client_fraction)
     distributions = {'C':uniform(loc=0.2, scale=0.8)}
     
-    print_results(compute_federated_experiment(classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
+    print_results(compute_federated_experiment(classifier, distributions, args.dataset, args.njobs, args.iid_dataset, args.evaluation_technique))
 
 def ensemble_flbsv():
     logger.info('Running ensemble flbsv experiment on %s', args.dataset)
@@ -112,7 +114,7 @@ def ensemble_flbsv():
     classifier = EnsembleFLBSV(normal_class_label=1, outlier_class_label=-1, q=1, total_clients=args.clients_amount, client_fraction=args.client_fraction)
     distributions = {'C':uniform(loc=0.2, scale=0.8)}
     
-    print_results(compute_federated_experiment(classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
+    print_results(compute_federated_experiment(classifier, distributions, args.dataset, args.njobs, args.iid_dataset, args.evaluation_technique))
 
 def ensemble_flbsv_noisy():
     logger.info('Running ensemble flbsv noisy experiment on %s', args.dataset)
@@ -120,7 +122,7 @@ def ensemble_flbsv_noisy():
     classifier = EnsembleFLBSV(normal_class_label=1, outlier_class_label=-1, privacy=True, q=1, total_clients=args.clients_amount, client_fraction=args.client_fraction)
     distributions = {'C':uniform(loc=0.2, scale=0.8)}
     
-    print_results(compute_federated_experiment(classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
+    print_results(compute_federated_experiment(classifier, distributions, args.dataset, args.njobs, args.iid_dataset, args.evaluation_technique))
 
 def most_frequent():
     logger.info('Running dummy most frequent experiment on %s', args.dataset)
@@ -128,12 +130,12 @@ def most_frequent():
     classifier = DummyClassifier(strategy='most_frequent')
     distributions = {}
 
-    print_results(compute_baseline(classifier, distributions, args.dataset, args.njobs, args.iid_dataset))
+    print_results(compute_baseline(classifier, distributions, args.dataset, args.njobs, args.iid_dataset, args.evaluation_technique))
 
 # parse the arguments
 args = parser.parse_args()
 run["parameters"] = vars(args)
-run["sys/tags"].add([args.experiment, args.dataset, args.iid_dataset])
+run["sys/tags"].add([args.experiment, args.dataset, args.iid_dataset, args.evaluation_technique])
 
 if args.loglevel:
     logger.setLevel(args.loglevel)
@@ -156,5 +158,6 @@ elif args.experiment == 'ensemble_flbsv_noisy':
 elif args.experiment == 'most_frequent':
     most_frequent()
 
-run["results/crossvalidation"].upload('cv_results.csv')
+if args.evaluation_technique == 'unsupervised':
+    run["results/crossvalidation"].upload('cv_results.csv')
 run.stop()

@@ -1,5 +1,27 @@
 dataset="letter"
-njobs=1
+njobs=-1
+tech="nested_crossval"
+
+# Baselines
+
+echo $(date)
+start=$(date +%s)
+python __main__.py baseline_sklearn $dataset 1 1 iid --njobs $njobs $tech
+end=$(date +%s)
+echo "Elapsed time: $(($end-$start)) s"
+
+export $(cat .env | xargs)
+neptune sync
+
+echo $(date)
+start=$(date +%s)
+python __main__.py baseline_svdd $dataset 1 1 iid --njobs $njobs $tech
+end=$(date +%s)
+echo "Elapsed time: $(($end-$start)) s"
+
+export $(cat .env | xargs)
+neptune sync
+
 # DP FLBSV
 
 ## 2 Clients
@@ -13,7 +35,7 @@ fraction=0.5
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv $dataset $clients $fraction iid --njobs $njobs
+python __main__.py dp_flbsv $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -26,7 +48,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs
+python __main__.py dp_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -38,7 +60,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv $dataset $clients $fraction biased --njobs $njobs
+python __main__.py dp_flbsv $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -50,7 +72,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs
+python __main__.py dp_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -65,7 +87,7 @@ fraction=1
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv $dataset $clients $fraction iid --njobs $njobs
+python __main__.py dp_flbsv $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -78,7 +100,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs
+python __main__.py dp_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -90,7 +112,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv $dataset $clients $fraction biased --njobs $njobs
+python __main__.py dp_flbsv $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -102,7 +124,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs
+python __main__.py dp_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -120,7 +142,7 @@ fraction=0.5
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv $dataset $clients $fraction iid --njobs $njobs
+python __main__.py dp_flbsv $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -133,7 +155,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs
+python __main__.py dp_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -145,7 +167,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv $dataset $clients $fraction biased --njobs $njobs
+python __main__.py dp_flbsv $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -157,7 +179,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs
+python __main__.py dp_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -172,7 +194,7 @@ fraction=1
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv $dataset $clients $fraction iid --njobs $njobs
+python __main__.py dp_flbsv $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -185,7 +207,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs
+python __main__.py dp_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -197,7 +219,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv $dataset $clients $fraction biased --njobs $njobs
+python __main__.py dp_flbsv $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -209,7 +231,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs
+python __main__.py dp_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -227,7 +249,7 @@ fraction=0.5
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv $dataset $clients $fraction iid --njobs $njobs
+python __main__.py dp_flbsv $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -240,7 +262,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs
+python __main__.py dp_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -252,7 +274,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv $dataset $clients $fraction biased --njobs $njobs
+python __main__.py dp_flbsv $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -264,7 +286,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs
+python __main__.py dp_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -279,7 +301,7 @@ fraction=1
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv $dataset $clients $fraction iid --njobs $njobs
+python __main__.py dp_flbsv $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -292,7 +314,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs
+python __main__.py dp_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -304,7 +326,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv $dataset $clients $fraction biased --njobs $njobs
+python __main__.py dp_flbsv $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -316,7 +338,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py dp_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs
+python __main__.py dp_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -336,7 +358,7 @@ fraction=0.5
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv $dataset $clients $fraction iid --njobs $njobs
+python __main__.py ensemble_flbsv $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -349,7 +371,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs
+python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -361,7 +383,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv $dataset $clients $fraction biased --njobs $njobs
+python __main__.py ensemble_flbsv $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -373,7 +395,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs
+python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -388,7 +410,7 @@ fraction=1
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv $dataset $clients $fraction iid --njobs $njobs
+python __main__.py ensemble_flbsv $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -401,7 +423,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs
+python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -413,7 +435,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv $dataset $clients $fraction biased --njobs $njobs
+python __main__.py ensemble_flbsv $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -425,7 +447,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs
+python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -443,7 +465,7 @@ fraction=0.5
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv $dataset $clients $fraction iid --njobs $njobs
+python __main__.py ensemble_flbsv $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -456,7 +478,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs
+python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -468,7 +490,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv $dataset $clients $fraction biased --njobs $njobs
+python __main__.py ensemble_flbsv $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -480,7 +502,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs
+python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -495,7 +517,7 @@ fraction=1
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv $dataset $clients $fraction iid --njobs $njobs
+python __main__.py ensemble_flbsv $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -508,7 +530,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs
+python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -520,7 +542,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv $dataset $clients $fraction biased --njobs $njobs
+python __main__.py ensemble_flbsv $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -532,7 +554,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs
+python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -550,7 +572,7 @@ fraction=0.5
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv $dataset $clients $fraction iid --njobs $njobs
+python __main__.py ensemble_flbsv $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -563,7 +585,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs
+python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -575,7 +597,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv $dataset $clients $fraction biased --njobs $njobs
+python __main__.py ensemble_flbsv $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -587,7 +609,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs
+python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -602,7 +624,7 @@ fraction=1
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv $dataset $clients $fraction iid --njobs $njobs
+python __main__.py ensemble_flbsv $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -615,7 +637,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs
+python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction iid --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -627,7 +649,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv $dataset $clients $fraction biased --njobs $njobs
+python __main__.py ensemble_flbsv $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
@@ -639,7 +661,7 @@ neptune sync
 
 echo $(date)
 start=$(date +%s)
-python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs
+python __main__.py ensemble_flbsv_noisy $dataset $clients $fraction biased --njobs $njobs $tech
 end=$(date +%s)
 end=$(date +%s)
 echo "Elapsed time: $(($end-$start)) s"
