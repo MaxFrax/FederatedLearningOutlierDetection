@@ -72,7 +72,7 @@ def nested_crossval_experiment(X: np.ndarray, y: np.array, classifier, distribut
     model = RandomizedSearchCV(classifier, distributions, cv=inner_cv, n_iter=10, scoring=['roc_auc', 'accuracy'], n_jobs=njobs, error_score='raise', verbose=0, refit='accuracy')
 
     # Outer cross-validation to compute the testing score
-    test_score = cross_validate(model, X, y, cv=outer_cv, n_jobs=njobs, scoring=['roc_auc', 'accuracy'], params=fit_params)
+    test_score = cross_validate(model, X, y, cv=outer_cv, n_jobs=njobs, scoring=['roc_auc', 'accuracy'], fit_params=fit_params, verbose=0)
 
     return {
         'roc_auc': {
@@ -85,15 +85,18 @@ def nested_crossval_experiment(X: np.ndarray, y: np.array, classifier, distribut
         }
     }
 
-def compute_baseline(classifier, distributions, dataset, njobs, iid, fit_params={}):
+def compute_baseline(classifier, distributions, dataset, njobs, iid, eval_technique, fit_params={}):
     dinfo = get_datasets()[dataset]
 
     X,y = get_dataset_from_path(dinfo)
-    res = unsupervised_experiment(X, y, classifier, distributions, njobs)
+    if eval_technique == 'unsupervised':
+        res = unsupervised_experiment(X, y, classifier, distributions, njobs)
+    else:
+        res = nested_crossval_experiment(X, y, classifier, distributions, njobs)
 
     return res
 
-def compute_federated_experiment(classifier, distributions, dataset, njobs, iid, fit_params=None):
+def compute_federated_experiment(classifier, distributions, dataset, njobs, iid, eval_technique, fit_params=None):
     np.random.seed(941703)
 
     dinfo = get_datasets()[dataset]
@@ -121,6 +124,9 @@ def compute_federated_experiment(classifier, distributions, dataset, njobs, iid,
         'round_callback': None
     }
 
-    res = unsupervised_experiment(X, y, classifier, distributions, njobs, fit_params)
+    if eval_technique == 'unsupervised':
+        res = unsupervised_experiment(X, y, classifier, distributions, njobs, fit_params)
+    else:
+        res = nested_crossval_experiment(X, y, classifier, distributions, njobs, fit_params)
 
     return res
