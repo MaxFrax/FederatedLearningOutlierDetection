@@ -15,8 +15,6 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
     def __init__(self, c: float = 1, q: float = 1, normal_class_label:int=0, outlier_class_label:int=1):
         self.q = q
         self.c = c
-        self.X_ = None
-        self.y_ = None
         self.betas_ = None
         self.constant_term_ = None
         self.radiuses_ = None
@@ -34,32 +32,18 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
     def __setstate__(self, state):
         self.__dict__ = state
 
-    def fit(self, X, y):
+    def fit(self, X, y=None):
         # Input validation
-        assert len(X) > 0, f'You cannot fit with X of length 0'
-        assert len(y) > 0, f'You cannot fit with y of length 0'
+        assert len(X) > 3, f'You cannot fit with X of length less than 3'
         assert self.c >= 1 / len(X), f'c must be at least >= 1/{len(X)} = {1 / len(X)} to satisfy the constraint on the betas. Instead it is {self.c}'
 
         self.X_ = X
-        self.y_ = y
 
         LOGGER.debug(f'Solving optimization {len(X)} with c {self.c}')
 
-        self.X_train_, self.y_train_ = [], []
-
-        for i, y in enumerate(y):
-            if y == self.normal_class_label:
-                self.y_train_.append(y)
-                self.X_train_.append(X[i])
-
-        self.X_train_ = np.array(self.X_train_)
-        self.y_train_ = np.array(self.y_train_)
-
-        assert len(self.X_train_) > 0, f"There is no normal data for training among the provided {len(X)}"
-
         try:
             self.betas_, self.constant_term_ = BSVClassifier._solve_optimization_gurobi(
-                self.X_train_, self.c, self.q)
+                self.X_, self.c, self.q)
         except gp.GurobiError:
             raise
         except:
@@ -67,10 +51,8 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
             LOGGER.error(f'q: {self.q}')
             LOGGER.error(f'normale: {self.normal_class_label}')
             LOGGER.error(f'outlier: {self.outlier_class_label}')
-            LOGGER.error(f'X len {self.X_train_.shape}')
-            LOGGER.error(f'y len {self.y_train_.shape}')
-            self.X_train_.dump('failedX')
-            self.y_train_.dump('failedY')
+            LOGGER.error(f'X len {self.X_.shape}')
+            self.X_.dump('failedX')
             raise
 
         self.radiuses_ = [self._compute_r(x) for x in X]
@@ -152,7 +134,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         if self.constant_term_ is not None:
             v = 1 + self.constant_term_
             v += -2 * self.betas_ @ [self._gaussian_kernel(
-                x_i, x, self.q) for x_i in self.X_train_]
+                x_i, x, self.q) for x_i in self.X_]
             v = np.sqrt(v)
             return v
         else:
@@ -160,11 +142,11 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
 
     def _best_radius(self) -> float:
 
-        if len(self.X_train_) == 1:
+        if len(self.X_) == 1:
             return 0
 
         sv = self.get_support_vectors()
-        assert len(sv) > 0, f'Cannot compute best radius. Missing support vectors among {len(self.X_train_)} datapoints. Maybe something went wrong during training?'
+        assert len(sv) > 0, f'Cannot compute best radius. Missing support vectors among {len(self.X_)} datapoints. Maybe something went wrong during training?'
         return np.average([self._compute_r(x) for x in sv])
 
     def decision_function(self, X):
@@ -172,7 +154,7 @@ class BSVClassifier(ClassifierMixin, BaseEstimator):
         return self.score_samples(X)
     
     def get_support_vectors(self):
-        return np.array([x for b, x in zip(self.betas_, self.X_train_) if not np.isclose(b, self.c) and not np.isclose(b, 0)])
+        return np.array([x for b, x in zip(self.betas_, self.X_) if not np.isclose(b, self.c) and not np.isclose(b, 0)])
 
     def get_inside_points(self):
-        return np.array([x for b, x in zip(self.betas_, self.X_train_) if np.isclose(b, 0)])
+        return np.array([x for b, x in zip(self.betas_, self.X_) if np.isclose(b, 0)])

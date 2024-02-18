@@ -30,25 +30,16 @@ class EnsembleFLBSV(ClassifierMixin, BaseEstimator):
     def init_server_model(self):
         return []
 
-    def fit(self, X, y, client_assignment, round_callback):
-        if sum(y) != len(y)*self.normal_class_label:
-            LOGGER.warning('FederatedBSVClassifier is not designed to train with outliers. All outliers will be ignored')
-        self.X_train_, self.y_train_, self.client_assignment_train = [], [], []
-
-        for i, y in enumerate(y):
-            if y == self.normal_class_label:
-                self.y_train_.append(y)
-                self.X_train_.append(X[i])
-                self.client_assignment_train.append(client_assignment[i])        
-
+    def fit(self, X, y=None, client_assignment=None, round_callback=None):
         clients_x = defaultdict(list)
-        clients_y = defaultdict(list)
 
         # Divides data among clients
-        for i, x in enumerate(self.X_train_):
-            assignment = self.client_assignment_train[i]
+        for i, x in enumerate(X):
+            assignment = client_assignment[i]
             clients_x[assignment].append(x)
-            clients_y[assignment].append(self.y_train_[i])
+
+        for i in range(self.total_clients):
+            clients_x[i] = np.array(clients_x[i])
 
         if len(np.unique(client_assignment)) != self.total_clients:
             LOGGER.warning(f'It seems like some clients do not have any data. Expected {self.total_clients} clients, but found {len(np.unique(client_assignment))}')  
@@ -68,7 +59,7 @@ class EnsembleFLBSV(ClassifierMixin, BaseEstimator):
 
         for c_ix in clients_ix:
             LOGGER.info(f'Client {c_ix} update')
-            updates.append(self.client_compute_update(c_ix, self.model, clients_x[c_ix], clients_y[c_ix]))
+            updates.append(self.client_compute_update(c_ix, self.model, clients_x[c_ix]))
 
         self.model = self.global_combine(r, self.model, updates)
 
@@ -77,39 +68,24 @@ class EnsembleFLBSV(ClassifierMixin, BaseEstimator):
 
         return self
 
-    def client_compute_update(self, index, global_model, client_data_x, client_data_y):
+    def client_compute_update(self, index, global_model, client_data_x):
 
         if len(client_data_x) <= 0:
             LOGGER.warning(f'Client {index} does not have any data to compute its update')
             return None
 
-        # Filter out anomalies from the training data
-        train_x, train_y = [], []
-
-        for i, x in enumerate(client_data_x):
-            if client_data_y[i] == self.normal_class_label:
-                train_x.append(x)
-                train_y.append(client_data_y[i])
-
-        # If there is no normal data, we can't train the model
-        if len(train_x) == 0:
-            LOGGER.error(f'Client {index} does not have any normal data to train the model')
-            return None
-        
-        train_x = np.array(train_x)
-
         clf = BSVClassifier(q=self.q, c=self.C, normal_class_label=self.normal_class_label, outlier_class_label=self.outlier_class_label)
         try:
-            clf.fit(train_x, train_y)
+            clf.fit(client_data_x)
         except:
-            LOGGER.warning(F'Client {index} failed to train the model over {len(train_x)} points')
+            LOGGER.warning(F'Client {index} failed to train the model over {len(client_data_x)} points')
             return None
 
         if self.privacy:
             succeeded = False
             multiplier = 2
             while not succeeded and multiplier < 10:
-                dataset = self.generate_synthetic_dataset(clf, train_x, multiplier)
+                dataset = self.generate_synthetic_dataset(clf, client_data_x, multiplier)
 
                 derived = BSVClassifier(q=self.q, c=self.C, normal_class_label=self.normal_class_label, outlier_class_label=self.outlier_class_label)
                 try:
@@ -118,7 +94,7 @@ class EnsembleFLBSV(ClassifierMixin, BaseEstimator):
                 except:
                     multiplier +=1
 
-            LOGGER.debug(f'Derived had {len(derived.X_train_)} training points. Original had {len(clf.X_train_)}')
+            LOGGER.debug(f'Derived had {len(derived.X_)} training points. Original had {len(clf.X_)}')
             LOGGER.debug(f'Derived had {len(derived.get_support_vectors())} support vectors. Original had {len(clf.get_support_vectors())}')
 
             clf = derived
@@ -131,7 +107,7 @@ class EnsembleFLBSV(ClassifierMixin, BaseEstimator):
 
         while count_normal is None or count_normal < 3:
             if attempts > 100:
-                raise Exception(f'Could not generate a dataset with at least 3 normal points in 100 attempts. I found just {count_normal} normal points')
+                raise Exception(f'Could not generate a dataset with at least 3 normal points in 100 attempts. I found just {count_normal} normal points in {len(dataset)}. {(self.privacy, self.C, self.total_clients, self.client_fraction)}')
 
             # Keeps the normal points already generated
             new_dataset, _ = self.sample_classifier(clf, train_x, multiplier)

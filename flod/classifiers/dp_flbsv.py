@@ -38,30 +38,18 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
             'xs': np.empty(shape=(0, dimensions_count))
     }
 
-    def fit(self, X, Y, client_assignment, round_callback):
-        if sum(Y) != len(Y)*self.normal_class_label:
-            LOGGER.warning('FederatedBSVClassifier is not designed to train with outliers. All outliers will be ignored')
-        self.X_train_, self.y_train_, self.client_assignment_train = [], [], []
-
+    def fit(self, X, y=None, client_assignment=None, round_callback=None):
         assert X.shape[0] == client_assignment.shape[0], 'X and client_assignment must have the same number of rows'
-
-        for i, y in enumerate(Y):
-            if y == self.normal_class_label:
-                self.y_train_.append(y)
-                self.X_train_.append(X[i])
-                self.client_assignment_train.append(client_assignment[i])
 
         if len(np.unique(client_assignment)) != self.total_clients:
             LOGGER.warning(f'It seems like some clients do not have any data. Expected {self.total_clients} clients, but found {len(np.unique(client_assignment))}')  
 
         clients_x = defaultdict(list)
-        clients_y = defaultdict(list)
 
         # Divides data among clients
-        for i, x in enumerate(self.X_train_):
-            assignment = self.client_assignment_train[i]
+        for i, x in enumerate(X):
+            assignment = client_assignment[i]
             clients_x[assignment].append(x)
-            clients_y[assignment].append(self.y_train_[i])
 
         self.model = self.init_server_model(X.shape[1])
         
@@ -78,7 +66,7 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
 
             for c_ix in clients_ix:
                 LOGGER.info(f'Client {c_ix} update')
-                updates.append(self.client_compute_update(c_ix, self.model, clients_x[c_ix], clients_y[c_ix]))
+                updates.append(self.client_compute_update(c_ix, self.model, clients_x[c_ix]))
 
             self.model = self.global_combine(r, self.model, updates)
 
@@ -87,37 +75,23 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
 
         return self
 
-    def client_compute_update(self, index, global_model, client_data_x, client_data_y):
+    def client_compute_update(self, index, global_model, client_data_x):
 
         if len(client_data_x) <= 0:
             LOGGER.warning(f'Client {index} does not have any data to compute its update')
             return np.empty(shape=(0, self.dimensions_count))
 
-        # Filter out anomalies from the training data
-        train_x, train_y = [], []
-
-        for i, x in enumerate(client_data_x):
-            if client_data_y[i] == self.normal_class_label:
-                train_x.append(x)
-                train_y.append(client_data_y[i])
-
-        # If there is no normal data, we can't train the model
-        if len(train_x) == 0:
-            LOGGER.error(f'Client {index} does not have any normal data to train the model')
-            return np.empty(shape=(0, self.dimensions_count))
-
-        combined_x = np.concatenate([global_model['xs'], np.array(train_x)])
-        combined_y = np.concatenate([[self.normal_class_label] * len(global_model['xs']), np.array(train_y)])
+        combined_x = np.concatenate([global_model['xs'], np.array(client_data_x)])
         clf = BSVClassifier(q=self.q, c=self.C, normal_class_label=self.normal_class_label, outlier_class_label=self.outlier_class_label)
 
         try:
-            clf.fit(combined_x, combined_y)
+            clf.fit(combined_x)
         except:
             LOGGER.warning(f'Client {index} failed to train the model over {combined_x.shape[0]} samples')
             return np.empty(shape=(0, self.dimensions_count))
 
         support_vectors = []
-        for b, x in zip(clf.betas_, clf.X_train_):
+        for b, x in zip(clf.betas_, clf.X_):
             if not np.isclose(b, self.C) and not np.isclose(b, 0):
                 support_vectors.append(x)
 
@@ -149,7 +123,7 @@ class DPFLBSV(ClassifierMixin, BaseEstimator):
         clf.fit(self.all_support_vectors, y)
 
         support_vectors, betas = [], []
-        for b, x in zip(clf.betas_, clf.X_train_):
+        for b, x in zip(clf.betas_, clf.X_):
             if not np.isclose(b, self.C) and not np.isclose(b, 0):
                 support_vectors.append(x)
                 betas.append(b)
