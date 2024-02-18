@@ -9,4 +9,4 @@ WORKDIR /FederatedLearningOutlierDetection
 
 COPY ./ ./
 
-CMD ["sh", "experiments_penlocal.sh"]
+CMD ["sh", "dockerexp.sh"]
