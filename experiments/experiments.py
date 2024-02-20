@@ -2,6 +2,8 @@ import glob
 import os
 import numpy as np
 import pandas as pd
+from typing import Tuple
+from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.model_selection import PredefinedSplit, RandomizedSearchCV, StratifiedKFold, cross_validate
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.cluster import KMeans
@@ -41,25 +43,36 @@ def get_datasets():
 
     return datasets
 
-def unsupervised_experiment(X: np.ndarray, y: np.array, classifier, distributions, njobs: int, fit_params = {}) -> (float, float):
-    test_fold = [0 if v < len(X) else 1 for v in range(len(X) * 2)]
+def unsupervised_experiment(X: np.ndarray, y: np.array, classifier, distributions, njobs: int, fit_params = {}) -> Tuple[float, float]:
+    accuracies = []
+    aucs = []
 
-    search = RandomizedSearchCV(classifier, distributions, cv=PredefinedSplit(
-        test_fold=test_fold), refit=False, n_iter=10, scoring=['roc_auc', 'accuracy'], n_jobs=njobs, error_score='raise', verbose=10)
+    # TODO parallelizzare
+    for _ in range(10):
+        # Draw from distributions
+        if distributions.get('C'):
+            drawn_samples = distributions['C'].rvs()
+            classifier.C = drawn_samples
+        else:
+            drawn_samples = distributions['c'].rvs()
+            classifier.c = drawn_samples
 
-    res = search.fit(np.concatenate((X, X)), np.concatenate((y, y)), **fit_params)
+        # Fit the model over the whole dataset
+        classifier.fit(X, y, **fit_params)
 
-    cv_results = pd.DataFrame(res.cv_results_)
-    cv_results.to_csv(f'cv_results.csv')
+        # Compute the metrics over the whole dataset ROC AUC and Accuracy
+        y_pred = classifier.predict(X)
+        aucs.append(roc_auc_score(y, classifier.score_samples(X)))
+        accuracies.append(accuracy_score(y, y_pred))
 
     return {
         'roc_auc': {
-            'mean': np.average(cv_results['mean_test_roc_auc']),
-            'std': np.std(cv_results['mean_test_roc_auc'])
+            'mean': np.average(aucs),
+            'std': np.std(aucs)
         },
         'accuracy': {
-            'mean': np.average(cv_results['mean_test_accuracy']),
-            'std': np.std(cv_results['mean_test_accuracy'])
+            'mean': np.average(accuracies),
+            'std': np.std(accuracies)
         }
     }
 
