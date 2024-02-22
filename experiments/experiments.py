@@ -47,15 +47,17 @@ def unsupervised_experiment(X: np.ndarray, y: np.array, classifier, distribution
     accuracies = []
     aucs = []
 
-    # TODO parallelizzare
     for _ in range(10):
         # Draw from distributions
         if distributions.get('C'):
             drawn_samples = distributions['C'].rvs()
             classifier.C = drawn_samples
-        else:
+        elif distributions.get('c'):
             drawn_samples = distributions['c'].rvs()
             classifier.c = drawn_samples
+        else:
+            drawn_samples = distributions['nu'].rvs()
+            classifier.nu = drawn_samples
 
         # Fit the model over the whole dataset
         classifier.fit(X, y, **fit_params)

@@ -1,6 +1,6 @@
 dataset="letter"
 njobs=-1
-tech="nested_crossval"
+tech="unsupervised"
 
 # Baselines
 
