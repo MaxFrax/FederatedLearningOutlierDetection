@@ -135,7 +135,7 @@ def most_frequent():
 # parse the arguments
 args = parser.parse_args()
 run["parameters"] = vars(args)
-run["sys/tags"].add([args.experiment, args.dataset, args.iid_dataset, args.evaluation_technique, "unsupervised"])
+run["sys/tags"].add([args.experiment, args.dataset, args.iid_dataset, args.evaluation_technique, "unsupervised", "auc_optimized"])
 
 if args.loglevel:
     logger.setLevel(args.loglevel)

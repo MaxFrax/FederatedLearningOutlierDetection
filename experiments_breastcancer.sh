@@ -1,6 +1,6 @@
 dataset="breast-cancer"
 njobs=-1
-tech="unsupervised"
+tech="nested_crossval"
 
 # Baselines
 

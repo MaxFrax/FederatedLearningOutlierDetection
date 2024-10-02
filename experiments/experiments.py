@@ -84,7 +84,7 @@ def nested_crossval_experiment(X: np.ndarray, y: np.array, classifier, distribut
     outer_cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=941703)
 
     # Inner cross-validation for parameter search
-    model = RandomizedSearchCV(classifier, distributions, cv=inner_cv, n_iter=10, scoring=['roc_auc', 'accuracy'], n_jobs=njobs, error_score='raise', verbose=0, refit='accuracy')
+    model = RandomizedSearchCV(classifier, distributions, cv=inner_cv, n_iter=10, scoring=['roc_auc', 'accuracy'], n_jobs=njobs, error_score='raise', verbose=0, refit='roc_auc')
 
     # Outer cross-validation to compute the testing score
     test_score = cross_validate(model, X, y, cv=outer_cv, n_jobs=njobs, scoring=['roc_auc', 'accuracy'], fit_params=fit_params, verbose=0)
